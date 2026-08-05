@@ -1,0 +1,35 @@
+name: JDK 25 scheduled verification
+
+on:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Java 25 native integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - name: Build native library
+        run: |
+          docker build -f containers/build-linux-glibc/Containerfile -t sqlite-native:glibc .
+          mkdir -p native-output
+          container_id=$(docker create sqlite-native:glibc)
+          docker cp "$container_id:/opt/sqlite-jdbc/." native-output/
+          docker rm "$container_id"
+      - name: Run full packaged-native verification
+        run: >
+          ./mvnw --batch-mode --no-transfer-progress verify
+          -Dsqlite.native.platform=linux-x86_64-glibc
+          -Dsqlite.native.classifier=linux-x86_64-glibc
+          -Dsqlite.native.inputDirectory=${{ github.workspace }}/native-output/lib
+          -Dsqlite.native.inputFile=libsqlitejdbc.so

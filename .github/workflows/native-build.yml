@@ -1,0 +1,137 @@
+name: Native build
+
+on:
+  pull_request:
+    paths:
+      - "sqlite-native/**"
+      - "containers/**"
+      - "sqlite-ffm/**"
+      - "sqlite-driver/**"
+      - "integration-tests/**"
+      - "pom.xml"
+      - "mvnw"
+      - "mvnw.cmd"
+      - ".github/workflows/native-build.yml"
+  push:
+    branches: [main]
+    paths:
+      - "sqlite-native/**"
+      - "containers/**"
+      - "sqlite-ffm/**"
+      - "sqlite-driver/**"
+      - "integration-tests/**"
+      - "pom.xml"
+      - "mvnw"
+      - "mvnw.cmd"
+      - ".github/workflows/native-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }} ${{ matrix.libc }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+        libc: [glibc, musl]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - name: Build container
+        run: docker build -f containers/build-linux-${{ matrix.libc }}/Containerfile -t sqlite-native:${{ matrix.libc }} .
+      - name: Extract artifact
+        run: |
+          mkdir -p native-output
+          container_id=$(docker create sqlite-native:${{ matrix.libc }})
+          docker cp "$container_id:/opt/sqlite-jdbc/." native-output/
+          docker rm "$container_id"
+      - name: Verify exported SQLite API
+        run: nm -D native-output/lib/libsqlitejdbc.so | grep ' sqlitejdbc_open_v2$'
+      - name: Test and package Maven classifier
+        run: >
+          ./mvnw --batch-mode --no-transfer-progress verify
+          -Dsqlite.native.platform=linux-${{ matrix.arch }}-${{ matrix.libc }}
+          -Dsqlite.native.classifier=linux-${{ matrix.arch }}-${{ matrix.libc }}
+          -Dsqlite.native.inputDirectory=${{ github.workspace }}/native-output/lib
+          -Dsqlite.native.inputFile=libsqlitejdbc.so
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-native-linux-${{ matrix.arch }}-${{ matrix.libc }}
+          path: sqlite-native/target/sqlite-native-*-linux-${{ matrix.arch }}-${{ matrix.libc }}.jar
+          if-no-files-found: error
+
+  windows:
+    name: Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - run: cmake -S sqlite-native -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --config Release
+      - run: cmake --install build --config Release --prefix native-output
+      - name: Test and package Maven classifier
+        run: >
+          .\mvnw.cmd --batch-mode --no-transfer-progress verify
+          -Dsqlite.native.platform=windows-x86_64
+          -Dsqlite.native.classifier=windows-x86_64
+          "-Dsqlite.native.inputDirectory=${{ github.workspace }}\native-output\bin"
+          -Dsqlite.native.inputFile=sqlitejdbc.dll
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-native-windows-x86_64
+          path: sqlite-native/target/sqlite-native-*-windows-x86_64.jar
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            cmake_arch: x86_64
+            runner: macos-15-intel
+          - arch: aarch64
+            cmake_arch: arm64
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - run: cmake -S sqlite-native -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=${{ matrix.cmake_arch }}
+      - run: cmake --build build --config Release
+      - run: cmake --install build --config Release --prefix native-output
+      - run: nm -gU native-output/lib/libsqlitejdbc.dylib | grep ' _sqlitejdbc_open_v2$'
+      - name: Test and package Maven classifier
+        run: >
+          ./mvnw --batch-mode --no-transfer-progress verify
+          -Dsqlite.native.platform=macos-${{ matrix.arch }}
+          -Dsqlite.native.classifier=macos-${{ matrix.arch }}
+          -Dsqlite.native.inputDirectory=${{ github.workspace }}/native-output/lib
+          -Dsqlite.native.inputFile=libsqlitejdbc.dylib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-native-macos-${{ matrix.arch }}
+          path: sqlite-native/target/sqlite-native-*-macos-${{ matrix.arch }}.jar
+          if-no-files-found: error

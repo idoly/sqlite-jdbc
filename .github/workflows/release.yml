@@ -1,0 +1,202 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }} ${{ matrix.libc }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+        libc: [glibc, musl]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - name: Set release version
+        run: >
+          ./mvnw --batch-mode --no-transfer-progress versions:set
+          -DnewVersion="${GITHUB_REF_NAME#v}"
+          -DgenerateBackupPoms=false
+      - name: Build native library
+        run: docker build -f containers/build-linux-${{ matrix.libc }}/Containerfile -t sqlite-native:${{ matrix.libc }} .
+      - name: Extract native library
+        run: |
+          mkdir -p native-output
+          container_id=$(docker create sqlite-native:${{ matrix.libc }})
+          docker cp "$container_id:/opt/sqlite-jdbc/." native-output/
+          docker rm "$container_id"
+      - name: Verify exported ABI
+        run: |
+          test "$(nm -D --defined-only native-output/lib/libsqlitejdbc.so | awk '{print $3}' | grep -c '^sqlitejdbc_')" -eq 29
+          ! nm -D --defined-only native-output/lib/libsqlitejdbc.so | awk '{print $3}' | grep -q '^sqlite3_'
+      - name: Test and package classifier
+        run: >
+          ./mvnw --batch-mode --no-transfer-progress verify
+          -Dsqlite.native.platform=linux-${{ matrix.arch }}-${{ matrix.libc }}
+          -Dsqlite.native.classifier=linux-${{ matrix.arch }}-${{ matrix.libc }}
+          -Dsqlite.native.inputDirectory=${{ github.workspace }}/native-output/lib
+          -Dsqlite.native.inputFile=libsqlitejdbc.so
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-native-linux-${{ matrix.arch }}-${{ matrix.libc }}
+          path: sqlite-native/target/sqlite-native-*-linux-${{ matrix.arch }}-${{ matrix.libc }}.jar
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - name: Set release version
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          .\mvnw.cmd --batch-mode --no-transfer-progress versions:set "-DnewVersion=$version" -DgenerateBackupPoms=false
+      - run: cmake -S sqlite-native -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --config Release
+      - run: cmake --install build --config Release --prefix native-output
+      - name: Verify exported ABI
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dumpbin = Get-ChildItem "$installation\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if ($null -eq $dumpbin) { throw "Could not locate dumpbin.exe" }
+          $exports = (& $dumpbin.FullName /EXPORTS native-output\bin\sqlitejdbc.dll | Select-String 'sqlitejdbc_').Count
+          if ($exports -ne 29) { throw "Expected 29 sqlitejdbc exports, found $exports" }
+      - name: Test and package classifier
+        run: >
+          .\mvnw.cmd --batch-mode --no-transfer-progress verify
+          -Dsqlite.native.platform=windows-x86_64
+          -Dsqlite.native.classifier=windows-x86_64
+          "-Dsqlite.native.inputDirectory=${{ github.workspace }}\native-output\bin"
+          -Dsqlite.native.inputFile=sqlitejdbc.dll
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-native-windows-x86_64
+          path: sqlite-native/target/sqlite-native-*-windows-x86_64.jar
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            cmake_arch: x86_64
+            runner: macos-15-intel
+          - arch: aarch64
+            cmake_arch: arm64
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - name: Set release version
+        run: >
+          ./mvnw --batch-mode --no-transfer-progress versions:set
+          -DnewVersion="${GITHUB_REF_NAME#v}"
+          -DgenerateBackupPoms=false
+      - run: cmake -S sqlite-native -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=${{ matrix.cmake_arch }}
+      - run: cmake --build build --config Release
+      - run: cmake --install build --config Release --prefix native-output
+      - name: Verify exported ABI
+        run: |
+          test "$(nm -gU native-output/lib/libsqlitejdbc.dylib | awk '{print $3}' | grep -c '^_sqlitejdbc_')" -eq 29
+          ! nm -gU native-output/lib/libsqlitejdbc.dylib | awk '{print $3}' | grep -q '^_sqlite3_'
+      - name: Test and package classifier
+        run: >
+          ./mvnw --batch-mode --no-transfer-progress verify
+          -Dsqlite.native.platform=macos-${{ matrix.arch }}
+          -Dsqlite.native.classifier=macos-${{ matrix.arch }}
+          -Dsqlite.native.inputDirectory=${{ github.workspace }}/native-output/lib
+          -Dsqlite.native.inputFile=libsqlitejdbc.dylib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-native-macos-${{ matrix.arch }}
+          path: sqlite-native/target/sqlite-native-*-macos-${{ matrix.arch }}.jar
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Sign and publish to Maven Central
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sqlite-native-*
+          path: release-native
+          merge-multiple: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+      - name: Set release version
+        run: >
+          ./mvnw --batch-mode --no-transfer-progress versions:set
+          -DnewVersion="${GITHUB_REF_NAME#v}"
+          -DgenerateBackupPoms=false
+      - name: Verify native artifact set
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          platforms=(
+            linux-x86_64-glibc linux-aarch64-glibc
+            linux-x86_64-musl linux-aarch64-musl
+            windows-x86_64 macos-x86_64 macos-aarch64
+          )
+          test "$(find release-native -maxdepth 1 -name '*.jar' | wc -l)" -eq 7
+          for platform in "${platforms[@]}"; do
+            test -f "release-native/sqlite-native-${version}-${platform}.jar"
+          done
+      - name: Publish signed release
+        env:
+          MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: >
+          ./mvnw --batch-mode --no-transfer-progress deploy -Prelease -DskipTests
+          -Dsqlite.native.releaseDirectory=${{ github.workspace }}/release-native

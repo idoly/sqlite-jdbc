@@ -1,0 +1,15 @@
+FROM rockylinux:8.10
+
+RUN dnf install -y cmake gcc make && dnf clean all
+
+COPY sqlite-native /workspace/sqlite-native
+WORKDIR /workspace/sqlite-native
+
+RUN cmake -S . -B /tmp/build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/opt/sqlite-jdbc \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+    && cmake --build /tmp/build \
+    && cmake --install /tmp/build --strip
+
+CMD ["sh", "-c", "cp -a /opt/sqlite-jdbc/. /output/"]

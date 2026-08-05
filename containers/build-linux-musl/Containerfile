@@ -1,0 +1,16 @@
+FROM alpine:3.22
+
+RUN apk add --no-cache build-base cmake ninja
+
+COPY sqlite-native /workspace/sqlite-native
+WORKDIR /workspace/sqlite-native
+
+RUN cmake -S . -B /tmp/build \
+      -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/opt/sqlite-jdbc \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+    && cmake --build /tmp/build \
+    && cmake --install /tmp/build --strip
+
+CMD ["sh", "-c", "cp -a /opt/sqlite-jdbc/. /output/"]
