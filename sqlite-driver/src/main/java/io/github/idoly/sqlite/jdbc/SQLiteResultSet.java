@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.io.StringReader;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -128,22 +129,35 @@ final class SQLiteResultSet extends ResultSetAdapter {
 
     @Override
     public boolean getBoolean(int columnIndex) throws SQLException {
-        return getLong(columnIndex) != 0;
+        StorageClass type = storageClass(columnIndex);
+        return switch (type) {
+            case NULL -> false;
+            case INTEGER -> statement.columnLong(columnIndex) != 0;
+            case REAL -> statement.columnDouble(columnIndex) != 0;
+            case TEXT -> parseBoolean(statement.columnText(columnIndex));
+            case BLOB -> throw new SQLException("BLOB column cannot be converted to boolean", "22018");
+        };
     }
 
     @Override
     public byte getByte(int columnIndex) throws SQLException {
-        return (byte) getLong(columnIndex);
+        long value = getLong(columnIndex);
+        if (value < Byte.MIN_VALUE || value > Byte.MAX_VALUE) throw numericOverflow(value, "byte");
+        return (byte) value;
     }
 
     @Override
     public short getShort(int columnIndex) throws SQLException {
-        return (short) getLong(columnIndex);
+        long value = getLong(columnIndex);
+        if (value < Short.MIN_VALUE || value > Short.MAX_VALUE) throw numericOverflow(value, "short");
+        return (short) value;
     }
 
     @Override
     public int getInt(int columnIndex) throws SQLException {
-        return (int) getLong(columnIndex);
+        long value = getLong(columnIndex);
+        if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) throw numericOverflow(value, "int");
+        return (int) value;
     }
 
     @Override
@@ -178,7 +192,7 @@ final class SQLiteResultSet extends ResultSetAdapter {
     @Deprecated
     public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
         BigDecimal value = getBigDecimal(columnIndex);
-        return value == null ? null : value.setScale(scale);
+        return value == null ? null : value.setScale(scale, RoundingMode.HALF_UP);
     }
 
     @Override
@@ -192,7 +206,7 @@ final class SQLiteResultSet extends ResultSetAdapter {
         String value = getString(columnIndex);
         if (value == null) return null;
         try {
-            return Date.valueOf(value);
+            return parseDate(value);
         } catch (IllegalArgumentException error) {
             throw temporalConversion("Date", value, error);
         }
@@ -203,7 +217,7 @@ final class SQLiteResultSet extends ResultSetAdapter {
         String value = getString(columnIndex);
         if (value == null) return null;
         try {
-            return Time.valueOf(value);
+            return parseTime(value);
         } catch (IllegalArgumentException error) {
             throw temporalConversion("Time", value, error);
         }
@@ -214,7 +228,7 @@ final class SQLiteResultSet extends ResultSetAdapter {
         String value = getString(columnIndex);
         if (value == null) return null;
         try {
-            return Timestamp.valueOf(value);
+            return parseTimestamp(value);
         } catch (IllegalArgumentException error) {
             throw temporalConversion("Timestamp", value, error);
         }
@@ -292,6 +306,7 @@ final class SQLiteResultSet extends ResultSetAdapter {
     @Override
     public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
         if (type == null) throw new SQLException("Target type cannot be null", "HY009");
+        if (isNull(columnIndex)) return null;
         Object value;
         if (type == String.class) value = getString(columnIndex);
         else if (type == Boolean.class) value = getBoolean(columnIndex);
@@ -436,20 +451,63 @@ final class SQLiteResultSet extends ResultSetAdapter {
     public boolean isClosed() { return position == Position.CLOSED; }
 
     @Override
-    public Date getDate(int columnIndex, Calendar calendar) throws SQLException { return getDate(columnIndex); }
+    public Date getDate(int columnIndex, Calendar calendar) throws SQLException {
+        String value = getString(columnIndex);
+        if (value == null) return null;
+        try {
+            java.time.LocalDate localDate = parseDate(value).toLocalDate();
+            Calendar effectiveCalendar = calendarOrDefault(calendar);
+            effectiveCalendar.clear();
+            effectiveCalendar.set(localDate.getYear(), localDate.getMonthValue() - 1, localDate.getDayOfMonth());
+            return new Date(effectiveCalendar.getTimeInMillis());
+        } catch (IllegalArgumentException error) {
+            throw temporalConversion("Date", value, error);
+        }
+    }
     @Override
-    public Date getDate(String columnLabel, Calendar calendar) throws SQLException { return getDate(columnLabel); }
+    public Date getDate(String columnLabel, Calendar calendar) throws SQLException {
+        return getDate(findColumn(columnLabel), calendar);
+    }
     @Override
-    public Time getTime(int columnIndex, Calendar calendar) throws SQLException { return getTime(columnIndex); }
+    public Time getTime(int columnIndex, Calendar calendar) throws SQLException {
+        String value = getString(columnIndex);
+        if (value == null) return null;
+        try {
+            java.time.LocalTime localTime = parseTime(value).toLocalTime();
+            Calendar effectiveCalendar = calendarOrDefault(calendar);
+            effectiveCalendar.clear();
+            effectiveCalendar.set(1970, Calendar.JANUARY, 1,
+                    localTime.getHour(), localTime.getMinute(), localTime.getSecond());
+            return new Time(effectiveCalendar.getTimeInMillis());
+        } catch (IllegalArgumentException error) {
+            throw temporalConversion("Time", value, error);
+        }
+    }
     @Override
-    public Time getTime(String columnLabel, Calendar calendar) throws SQLException { return getTime(columnLabel); }
+    public Time getTime(String columnLabel, Calendar calendar) throws SQLException {
+        return getTime(findColumn(columnLabel), calendar);
+    }
     @Override
     public Timestamp getTimestamp(int columnIndex, Calendar calendar) throws SQLException {
-        return getTimestamp(columnIndex);
+        String value = getString(columnIndex);
+        if (value == null) return null;
+        try {
+            java.time.LocalDateTime localDateTime = parseTimestamp(value).toLocalDateTime();
+            Calendar effectiveCalendar = calendarOrDefault(calendar);
+            effectiveCalendar.clear();
+            effectiveCalendar.set(localDateTime.getYear(), localDateTime.getMonthValue() - 1,
+                    localDateTime.getDayOfMonth(), localDateTime.getHour(), localDateTime.getMinute(),
+                    localDateTime.getSecond());
+            Timestamp result = new Timestamp(effectiveCalendar.getTimeInMillis());
+            result.setNanos(localDateTime.getNano());
+            return result;
+        } catch (IllegalArgumentException error) {
+            throw temporalConversion("Timestamp", value, error);
+        }
     }
     @Override
     public Timestamp getTimestamp(String columnLabel, Calendar calendar) throws SQLException {
-        return getTimestamp(columnLabel);
+        return getTimestamp(findColumn(columnLabel), calendar);
     }
     @Override
     public URL getURL(int columnIndex) throws SQLException {
@@ -529,8 +587,41 @@ final class SQLiteResultSet extends ResultSetAdapter {
         return new SQLiteResultSetMetaData(columns);
     }
 
+    private static Date parseDate(String value) {
+        return Date.valueOf(value.length() > 10 ? value.substring(0, 10) : value);
+    }
+
+    private static Time parseTime(String value) {
+        int separator = value.indexOf(' ');
+        String time = separator >= 0 ? value.substring(separator + 1) : value;
+        return Time.valueOf(time.length() > 8 ? time.substring(0, 8) : time);
+    }
+
+    private static Timestamp parseTimestamp(String value) {
+        return Timestamp.valueOf(value.length() == 10 ? value + " 00:00:00" : value);
+    }
+
+    private static Calendar calendarOrDefault(Calendar calendar) {
+        return calendar == null ? Calendar.getInstance() : (Calendar) calendar.clone();
+    }
+
     private static SQLException sqlException(NativeException error) {
         return SqlExceptionMapper.map(error);
+    }
+
+    private static boolean parseBoolean(String value) throws SQLException {
+        String text = value.trim();
+        if (text.equalsIgnoreCase("true")) return true;
+        if (text.equalsIgnoreCase("false")) return false;
+        try {
+            return new BigDecimal(text).compareTo(BigDecimal.ZERO) != 0;
+        } catch (NumberFormatException error) {
+            throw new SQLException("Column cannot be converted to boolean: " + value, "22018", error);
+        }
+    }
+
+    private static SQLException numericOverflow(long value, String targetType) {
+        return new SQLException("Column value " + value + " is outside the " + targetType + " range", "22003");
     }
 
     private static SQLException temporalConversion(String type, String value, Exception cause) {

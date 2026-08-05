@@ -24,7 +24,10 @@ final class SQLiteJdbcUrlTest {
     }
 
     @Test
-    void rejectsForeignUrlsDuringExplicitParsing() {
+    void rejectsForeignUrlsAndEmbeddedNulCharactersDuringExplicitParsing() {
         assertThrows(SQLException.class, () -> SQLiteJdbcUrl.parse("jdbc:other:test"));
+        SQLException nulUrl = assertThrows(
+                SQLException.class, () -> SQLiteJdbcUrl.parse("jdbc:sqlite:actual.db\0ignored.db"));
+        assertEquals("08001", nulUrl.getSQLState());
     }
 }

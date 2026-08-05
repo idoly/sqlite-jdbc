@@ -115,7 +115,7 @@ final class NativeDatabase implements AutoCloseable {
             throw new NativeException("SQL does not contain a statement", SQLITE_OK);
         }
 
-        NativeStatement statement = new NativeStatement(this, result.statement());
+        NativeStatement statement = new NativeStatement(this, result.statement(), sql);
         openStatements.add(statement);
         return statement;
     }
@@ -141,14 +141,20 @@ final class NativeDatabase implements AutoCloseable {
         };
     }
 
-    synchronized int totalChanges() {
+    synchronized int changes() {
         ensureOpen();
-        return nativeApi.totalChanges(handle);
+        return nativeApi.changes(handle);
+    }
+
+    synchronized long lastInsertRowId() {
+        ensureOpen();
+        return nativeApi.lastInsertRowId(handle);
     }
 
     synchronized void reset(StatementHandle statement) {
         ensureOpen(statement);
-        throwOnError(nativeApi.reset(statement));
+        // sqlite3_reset returns the previous step status even though the reset itself succeeded.
+        nativeApi.reset(statement);
     }
 
     synchronized void clearBindings(StatementHandle statement) {

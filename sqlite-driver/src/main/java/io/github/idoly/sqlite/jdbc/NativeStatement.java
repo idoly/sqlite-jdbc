@@ -5,11 +5,13 @@ import io.github.idoly.sqlite.ffm.StatementHandle;
 /** Owns one sqlite3_stmt handle and delegates all serialized access to its database facade. */
 final class NativeStatement implements AutoCloseable {
     private final NativeDatabase database;
+    private final boolean hasUpdateCount;
     private volatile StatementHandle handle;
 
-    NativeStatement(NativeDatabase database, StatementHandle handle) {
+    NativeStatement(NativeDatabase database, StatementHandle handle, String sql) {
         this.database = database;
         this.handle = handle;
+        this.hasUpdateCount = JdbcSupport.hasUpdateCount(sql);
     }
 
     boolean isOpen() {
@@ -115,12 +117,11 @@ final class NativeStatement implements AutoCloseable {
             throw new IllegalStateException("Statement produces a result set");
         }
 
-        int changesBefore = database.totalChanges();
         StepResult result = step();
         if (result != StepResult.DONE) {
             throw new IllegalStateException("Update statement unexpectedly produced a row");
         }
-        return database.totalChanges() - changesBefore;
+        return hasUpdateCount ? database.changes() : 0;
     }
 
     @Override

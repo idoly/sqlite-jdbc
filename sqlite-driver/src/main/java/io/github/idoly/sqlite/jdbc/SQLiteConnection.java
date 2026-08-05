@@ -491,11 +491,19 @@ final class SQLiteConnection implements Connection {
         if (sql == null) {
             throw new SQLException("SQL cannot be null", "HY009");
         }
+        if (sql.indexOf('\0') >= 0) {
+            throw new SQLException("SQL cannot contain a NUL character", "42000");
+        }
         try {
             return database.prepare(sql);
         } catch (NativeException error) {
             throw toSqlException(error);
         }
+    }
+
+    synchronized long lastInsertRowId() throws SQLException {
+        ensureOpen();
+        return database.lastInsertRowId();
     }
 
     void interrupt() {

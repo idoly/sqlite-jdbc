@@ -16,6 +16,7 @@ import java.sql.ParameterMetaData;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.SQLType;
 import java.sql.SQLXML;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -38,6 +39,7 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
     private final List<Object[]> batchParameterValues = new ArrayList<>();
     private final List<boolean[]> batchParametersBound = new ArrayList<>();
     private final boolean generatedKeys;
+    private final String sql;
     private boolean preparedClosed;
 
     SQLitePreparedStatement(SQLiteConnection connection, String sql) throws SQLException {
@@ -47,6 +49,7 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
     SQLitePreparedStatement(SQLiteConnection connection, String sql, boolean generatedKeys) throws SQLException {
         super(connection);
         this.generatedKeys = generatedKeys;
+        this.sql = sql;
         this.nativeStatement = connection.prepareForReuse(sql);
         this.parameterValues = new Object[nativeStatement.parameterCount()];
         this.parametersBound = new boolean[parameterValues.length];
@@ -75,7 +78,6 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
     public int executeUpdate() throws SQLException {
         ensureOpen();
         resetExecution();
-        generatedKeysRequested = generatedKeys;
         ensureParametersBound();
         if (nativeStatement.columnCount() != 0) {
             throw new SQLException("SQL produces a result set", "07000");
@@ -83,6 +85,7 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
         connection.beginTransactionIfNeeded();
         try {
             updateCount = runUpdate(nativeStatement);
+            captureGeneratedKey(generatedKeys, sql);
             return updateCount;
         } catch (NativeException error) {
             throw sqlException(error);
@@ -95,7 +98,6 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
     public boolean execute() throws SQLException {
         ensureOpen();
         resetExecution();
-        generatedKeysRequested = generatedKeys;
         ensureParametersBound();
         connection.beginTransactionIfNeeded();
         if (nativeStatement.columnCount() > 0) {
@@ -110,6 +112,7 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
         }
         try {
             updateCount = runUpdate(nativeStatement);
+            captureGeneratedKey(generatedKeys, sql);
             return false;
         } catch (NativeException error) {
             throw sqlException(error);
@@ -213,17 +216,43 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
 
     @Override
     public void setDate(int parameterIndex, Date value, Calendar calendar) throws SQLException {
-        setDate(parameterIndex, value);
+        if (value == null) {
+            setNull(parameterIndex, Types.DATE);
+            return;
+        }
+        Calendar effectiveCalendar = calendarOrDefault(calendar);
+        effectiveCalendar.setTimeInMillis(value.getTime());
+        setString(parameterIndex, String.format(java.util.Locale.ROOT, "%04d-%02d-%02d",
+                effectiveCalendar.get(Calendar.YEAR), effectiveCalendar.get(Calendar.MONTH) + 1,
+                effectiveCalendar.get(Calendar.DAY_OF_MONTH)));
     }
 
     @Override
     public void setTime(int parameterIndex, Time value, Calendar calendar) throws SQLException {
-        setTime(parameterIndex, value);
+        if (value == null) {
+            setNull(parameterIndex, Types.TIME);
+            return;
+        }
+        Calendar effectiveCalendar = calendarOrDefault(calendar);
+        effectiveCalendar.setTimeInMillis(value.getTime());
+        setString(parameterIndex, String.format(java.util.Locale.ROOT, "%02d:%02d:%02d",
+                effectiveCalendar.get(Calendar.HOUR_OF_DAY), effectiveCalendar.get(Calendar.MINUTE),
+                effectiveCalendar.get(Calendar.SECOND)));
     }
 
     @Override
     public void setTimestamp(int parameterIndex, Timestamp value, Calendar calendar) throws SQLException {
-        setTimestamp(parameterIndex, value);
+        if (value == null) {
+            setNull(parameterIndex, Types.TIMESTAMP);
+            return;
+        }
+        Calendar effectiveCalendar = calendarOrDefault(calendar);
+        effectiveCalendar.setTimeInMillis(value.getTime());
+        java.time.LocalDateTime localDateTime = java.time.LocalDateTime.of(
+                effectiveCalendar.get(Calendar.YEAR), effectiveCalendar.get(Calendar.MONTH) + 1,
+                effectiveCalendar.get(Calendar.DAY_OF_MONTH), effectiveCalendar.get(Calendar.HOUR_OF_DAY),
+                effectiveCalendar.get(Calendar.MINUTE), effectiveCalendar.get(Calendar.SECOND), value.getNanos());
+        setString(parameterIndex, Timestamp.valueOf(localDateTime).toString());
     }
 
     @Override
@@ -265,26 +294,45 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
     }
 
     @Override
+    public void setObject(int parameterIndex, Object value, SQLType targetSqlType) throws SQLException {
+        setObject(parameterIndex, value, sqlTypeNumber(targetSqlType), 0);
+    }
+
+    @Override
+    public void setObject(int parameterIndex, Object value, SQLType targetSqlType, int scaleOrLength)
+            throws SQLException {
+        setObject(parameterIndex, value, sqlTypeNumber(targetSqlType), scaleOrLength);
+    }
+
+    @Override
     public void setObject(int parameterIndex, Object value, int targetSqlType, int scaleOrLength) throws SQLException {
         if (value == null) {
             setNull(parameterIndex, targetSqlType);
             return;
         }
-        switch (targetSqlType) {
-            case Types.BIT, Types.BOOLEAN -> setBoolean(parameterIndex, asBoolean(value));
-            case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT ->
-                setLong(parameterIndex, asNumber(value).longValue());
-            case Types.REAL, Types.FLOAT, Types.DOUBLE -> setDouble(parameterIndex, asNumber(value).doubleValue());
-            case Types.NUMERIC, Types.DECIMAL -> setBigDecimal(parameterIndex, new BigDecimal(value.toString()));
-            case Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB -> {
-                if (!(value instanceof byte[] bytes)) throw conversionError(value, targetSqlType);
-                setBytes(parameterIndex, bytes);
+        try {
+            switch (targetSqlType) {
+                case Types.BIT, Types.BOOLEAN -> setBoolean(parameterIndex, asBoolean(value));
+                case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT ->
+                    setLong(parameterIndex, asNumber(value).longValue());
+                case Types.REAL, Types.FLOAT, Types.DOUBLE -> setDouble(parameterIndex, asNumber(value).doubleValue());
+                case Types.NUMERIC, Types.DECIMAL -> setBigDecimal(parameterIndex, new BigDecimal(value.toString()));
+                case Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB -> {
+                    if (!(value instanceof byte[] bytes)) throw conversionError(value, targetSqlType);
+                    setBytes(parameterIndex, bytes);
+                }
+                case Types.DATE -> setDate(
+                        parameterIndex, value instanceof Date date ? date : Date.valueOf(value.toString()));
+                case Types.TIME -> setTime(
+                        parameterIndex, value instanceof Time time ? time : Time.valueOf(value.toString()));
+                case Types.TIMESTAMP, Types.TIMESTAMP_WITH_TIMEZONE -> setTimestamp(parameterIndex,
+                        value instanceof Timestamp timestamp ? timestamp : Timestamp.valueOf(value.toString()));
+                default -> setString(parameterIndex, value.toString());
             }
-            case Types.DATE -> setDate(parameterIndex, value instanceof Date date ? date : Date.valueOf(value.toString()));
-            case Types.TIME -> setTime(parameterIndex, value instanceof Time time ? time : Time.valueOf(value.toString()));
-            case Types.TIMESTAMP, Types.TIMESTAMP_WITH_TIMEZONE -> setTimestamp(
-                    parameterIndex, value instanceof Timestamp timestamp ? timestamp : Timestamp.valueOf(value.toString()));
-            default -> setString(parameterIndex, value.toString());
+        } catch (IllegalArgumentException error) {
+            throw new SQLException(
+                    "Cannot convert " + value.getClass().getName() + " to SQL type " + targetSqlType,
+                    "22018", error);
         }
     }
 
@@ -435,6 +483,7 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
         boolean[] originalParametersBound = parametersBound.clone();
         int[] counts = new int[batchParameterValues.size()];
         int completed = 0;
+        SQLException executionFailure = null;
         try {
             for (; completed < batchParameterValues.size(); completed++) {
                 applyBindings(batchParameterValues.get(completed), batchParametersBound.get(completed));
@@ -442,14 +491,26 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
             }
             return counts;
         } catch (SQLException error) {
-            throw new BatchUpdateException(
+            BatchUpdateException batchFailure = new BatchUpdateException(
                     error.getMessage(), error.getSQLState(), error.getErrorCode(),
                     Arrays.copyOf(counts, completed), error);
+            executionFailure = batchFailure;
+            throw batchFailure;
         } finally {
             batchParameterValues.clear();
             batchParametersBound.clear();
-            applyBindings(originalParameterValues, originalParametersBound);
+            try {
+                applyBindings(originalParameterValues, originalParametersBound);
+            } catch (SQLException restoreFailure) {
+                if (executionFailure == null) throw restoreFailure;
+                executionFailure.addSuppressed(restoreFailure);
+            }
         }
+    }
+
+    @Override
+    public long executeLargeUpdate() throws SQLException {
+        return executeUpdate();
     }
 
     @Override
@@ -492,6 +553,14 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
     public boolean execute(String ignoredSql, int[] columnIndexes) throws SQLException { throw preparedStatementSqlMethod(); }
     @Override
     public boolean execute(String ignoredSql, String[] columnNames) throws SQLException { throw preparedStatementSqlMethod(); }
+    @Override
+    public long executeLargeUpdate(String ignoredSql) throws SQLException { throw preparedStatementSqlMethod(); }
+    @Override
+    public long executeLargeUpdate(String ignoredSql, int autoGeneratedKeys) throws SQLException { throw preparedStatementSqlMethod(); }
+    @Override
+    public long executeLargeUpdate(String ignoredSql, int[] columnIndexes) throws SQLException { throw preparedStatementSqlMethod(); }
+    @Override
+    public long executeLargeUpdate(String ignoredSql, String[] columnNames) throws SQLException { throw preparedStatementSqlMethod(); }
 
     private void setValue(int parameterIndex, Object value) throws SQLException {
         ensureOpen();
@@ -582,6 +651,13 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
                 int requested = length < 0 ? buffer.length : (int) Math.min(buffer.length, remaining);
                 int read = stream.read(buffer, 0, requested);
                 if (read < 0) break;
+                if (read == 0) {
+                    int singleByte = stream.read();
+                    if (singleByte < 0) break;
+                    output.write(singleByte);
+                    if (length >= 0) remaining--;
+                    continue;
+                }
                 output.write(buffer, 0, read);
                 if (length >= 0) remaining -= read;
             }
@@ -603,6 +679,13 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
                 int requested = length < 0 ? buffer.length : (int) Math.min(buffer.length, remaining);
                 int read = reader.read(buffer, 0, requested);
                 if (read < 0) break;
+                if (read == 0) {
+                    int singleCharacter = reader.read();
+                    if (singleCharacter < 0) break;
+                    result.append((char) singleCharacter);
+                    if (length >= 0) remaining--;
+                    continue;
+                }
                 result.append(buffer, 0, read);
                 if (length >= 0) remaining -= read;
             }
@@ -619,16 +702,30 @@ final class SQLitePreparedStatement extends PreparedStatementAdapter {
         }
     }
 
+    private static Calendar calendarOrDefault(Calendar calendar) {
+        return calendar == null ? Calendar.getInstance() : (Calendar) calendar.clone();
+    }
+
+    private static int sqlTypeNumber(SQLType sqlType) throws SQLException {
+        if (sqlType == null || sqlType.getVendorTypeNumber() == null) {
+            throw new SQLException("Target SQL type cannot be null", "HY009");
+        }
+        return sqlType.getVendorTypeNumber();
+    }
+
     private static Number asNumber(Object value) throws SQLException {
         if (value instanceof Number number) return number;
         try { return new BigDecimal(value.toString()); }
         catch (NumberFormatException error) { throw conversionError(value, Types.NUMERIC); }
     }
 
-    private static boolean asBoolean(Object value) {
+    private static boolean asBoolean(Object value) throws SQLException {
         if (value instanceof Boolean booleanValue) return booleanValue;
         if (value instanceof Number number) return number.doubleValue() != 0;
-        return Boolean.parseBoolean(value.toString());
+        String text = value.toString().trim();
+        if (text.equalsIgnoreCase("true") || text.equals("1")) return true;
+        if (text.equalsIgnoreCase("false") || text.equals("0")) return false;
+        throw conversionError(value, Types.BOOLEAN);
     }
 
     private static SQLException conversionError(Object value, int type) {

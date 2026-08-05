@@ -36,8 +36,12 @@ SQLITEJDBC_API void sqlitejdbc_interrupt(sqlite3 *database) {
     sqlite3_interrupt(database);
 }
 
-SQLITEJDBC_API int sqlitejdbc_total_changes(sqlite3 *database) {
-    return sqlite3_total_changes(database);
+SQLITEJDBC_API int sqlitejdbc_changes(sqlite3 *database) {
+    return sqlite3_changes(database);
+}
+
+SQLITEJDBC_API sqlite3_int64 sqlitejdbc_last_insert_rowid(sqlite3 *database) {
+    return sqlite3_last_insert_rowid(database);
 }
 
 SQLITEJDBC_API int sqlitejdbc_prepare_v3(

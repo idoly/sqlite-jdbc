@@ -37,7 +37,7 @@ public final class SQLiteDataSource implements DataSource {
     }
 
     /** @param url SQLite JDBC URL */
-    public void setUrl(String url) {
+    public synchronized void setUrl(String url) {
         this.url = Objects.requireNonNull(url, "url");
     }
 
@@ -93,8 +93,13 @@ public final class SQLiteDataSource implements DataSource {
 
     @Override
     public Connection getConnection() throws SQLException {
-        SQLiteConfig snapshot = config;
-        return driver.connect(url, snapshot.toProperties());
+        String urlSnapshot;
+        SQLiteConfig configSnapshot;
+        synchronized (this) {
+            urlSnapshot = url;
+            configSnapshot = config;
+        }
+        return driver.connect(urlSnapshot, configSnapshot.toProperties());
     }
 
     @Override

@@ -1,6 +1,6 @@
 # sqlite-jdbc
 
-A JDK 25+ SQLite JDBC driver built directly on the Foreign Function and Memory API, with reproducible native builds and platform-specific Maven artifacts.
+A JDK 25+ SQLite JDBC driver built directly on the Foreign Function and Memory API, with controlled native builds and platform-specific Maven artifacts.
 
 ## Requirements
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(sqlitejdbc VERSION 3.50.4 LANGUAGES C)
+project(sqlitejdbc VERSION 3.53.4 LANGUAGES C)
 
 add_library(sqlitejdbc SHARED
     src/main/c/sqlite3.c
@@ -29,15 +29,22 @@ target_compile_definitions(sqlitejdbc PRIVATE
 )
 
 if(MSVC)
-    target_compile_options(sqlitejdbc PRIVATE /O2 /W4)
+    target_compile_options(sqlitejdbc PRIVATE /O2 /W4 /guard:cf)
+    target_link_options(sqlitejdbc PRIVATE /guard:cf)
 else()
+    target_compile_definitions(sqlitejdbc PRIVATE _FORTIFY_SOURCE=2)
     target_compile_options(sqlitejdbc PRIVATE
         -O2
+        -fstack-protector-strong
         -Wall
         -Wextra
+        -Wno-implicit-fallthrough
         -Wno-unused-parameter
     )
     target_link_libraries(sqlitejdbc PRIVATE m)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_options(sqlitejdbc PRIVATE -Wl,-z,relro,-z,now)
+    endif()
 endif()
 
 

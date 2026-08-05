@@ -145,7 +145,7 @@ try (var connection = dataSource.getConnection();
 }
 ```
 
-`Statement.execute` returns `true` for a row-producing statement and `false` for an update. Multiple SQL statements in one string are rejected; trailing whitespace and comments are accepted.
+`Statement.execute` returns `true` for a row-producing statement and `false` for an update. Multiple SQL statements in one string and SQL containing NUL characters are rejected; trailing whitespace and comments are accepted. JDBC large-update methods delegate to the same execution path and return `long` counts.
 
 ## Prepared statements
 
@@ -168,6 +168,8 @@ try (var connection = dataSource.getConnection();
 }
 ```
 
+Generated keys are snapshots of `last_insert_rowid()` taken after a successful top-level `INSERT` or `REPLACE`, including those preceded by a `WITH` clause. Updates, failed executions, and executions that did not request keys return an empty generated-keys result.
+
 Canonical SQLite mappings:
 
 | Java/JDBC value | SQLite storage class |
@@ -179,7 +181,7 @@ Canonical SQLite mappings:
 | `byte[]`, binary streams and `Blob` | `BLOB` |
 | character streams, `Clob`, `NClob`, `SQLXML` | `TEXT` |
 
-`LocalDate`, `LocalTime`, and `LocalDateTime` are accepted by `setObject`. Date and time values use JDBC string representations; the database schema remains responsible for storage conventions.
+`LocalDate`, `LocalTime`, and `LocalDateTime` are accepted by `setObject`. Date and time values use JDBC string representations; the database schema remains responsible for storage conventions. Calendar overloads interpret those fields in the supplied time zone. TEXT values preserve embedded NUL characters because binding uses explicit UTF-8 byte lengths.
 
 ## Transactions
 
@@ -306,7 +308,7 @@ The driver throws `SQLFeatureNotSupportedException` with SQLState `0A000` for fe
 - SQL `Array`, `Struct`, `Ref`, and user-defined types
 - scrollable or updatable result sets
 - multiple simultaneous results from one statement
-- JDBC schemas and catalogs
+- JDBC schemas, catalog switching, and metadata for attached databases beyond `main`
 - XA and distributed transactions
 
 ## Troubleshooting

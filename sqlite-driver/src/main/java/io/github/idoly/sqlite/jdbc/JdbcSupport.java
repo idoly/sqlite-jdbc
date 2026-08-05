@@ -40,6 +40,86 @@ final class JdbcSupport {
         return columnNames.length == 1;
     }
 
+    static boolean mayGenerateKey(String sql) {
+        String command = topLevelCommand(sql);
+        return command.equalsIgnoreCase("INSERT") || command.equalsIgnoreCase("REPLACE");
+    }
+
+    static boolean hasUpdateCount(String sql) {
+        String command = topLevelCommand(sql);
+        return command.equalsIgnoreCase("INSERT") || command.equalsIgnoreCase("REPLACE")
+                || command.equalsIgnoreCase("UPDATE") || command.equalsIgnoreCase("DELETE");
+    }
+
+    private static String topLevelCommand(String sql) {
+        int length = sql.length();
+        int depth = 0;
+        boolean withClause = false;
+        boolean firstToken = true;
+        for (int index = 0; index < length;) {
+            char current = sql.charAt(index);
+            if (Character.isWhitespace(current)) {
+                index++;
+                continue;
+            }
+            if (current == '-' && index + 1 < length && sql.charAt(index + 1) == '-') {
+                index += 2;
+                while (index < length && sql.charAt(index) != '\n' && sql.charAt(index) != '\r') index++;
+                continue;
+            }
+            if (current == '/' && index + 1 < length && sql.charAt(index + 1) == '*') {
+                index += 2;
+                while (index + 1 < length && !(sql.charAt(index) == '*' && sql.charAt(index + 1) == '/')) index++;
+                index = Math.min(length, index + 2);
+                continue;
+            }
+            if (current == '\'' || current == '"' || current == '`' || current == '[') {
+                char closing = current == '[' ? ']' : current;
+                index++;
+                while (index < length) {
+                    char quoted = sql.charAt(index++);
+                    if (quoted == closing) {
+                        if (index < length && sql.charAt(index) == closing && closing != ']') index++;
+                        else break;
+                    }
+                }
+                continue;
+            }
+            if (current == '(') {
+                depth++;
+                index++;
+                continue;
+            }
+            if (current == ')') {
+                if (depth > 0) depth--;
+                index++;
+                continue;
+            }
+            if (Character.isLetter(current) || current == '_') {
+                int start = index++;
+                while (index < length) {
+                    char tokenCharacter = sql.charAt(index);
+                    if (!Character.isLetterOrDigit(tokenCharacter) && tokenCharacter != '_') break;
+                    index++;
+                }
+                if (depth != 0) continue;
+                String token = sql.substring(start, index);
+                if (firstToken) {
+                    firstToken = false;
+                    withClause = token.equalsIgnoreCase("WITH");
+                    if (!withClause) return token;
+                } else if (withClause && (token.equalsIgnoreCase("INSERT") || token.equalsIgnoreCase("REPLACE")
+                        || token.equalsIgnoreCase("SELECT") || token.equalsIgnoreCase("UPDATE")
+                        || token.equalsIgnoreCase("DELETE"))) {
+                    return token;
+                }
+                continue;
+            }
+            index++;
+        }
+        return "";
+    }
+
     static SQLFeatureNotSupportedException unsupported(String message) {
         return new SQLFeatureNotSupportedException(message, "0A000");
     }

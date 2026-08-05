@@ -17,6 +17,7 @@ import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
+import java.sql.JDBCType;
 import java.sql.NClob;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -29,7 +30,11 @@ import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.sql.SQLXML;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.Calendar;
 import java.util.Properties;
+import java.util.TimeZone;
 import org.junit.jupiter.api.Test;
 
 final class DriverIntegrationTest {
@@ -61,18 +66,36 @@ final class DriverIntegrationTest {
             statement.addBatch("UPDATE items SET name = 'updated' WHERE id = 1");
             assertArrayEquals(new int[] {1, 1}, statement.executeBatch());
 
+            assertEquals(0, statement.executeUpdate("CREATE TABLE item_audit(item_id INTEGER)"));
+            assertEquals(0, statement.executeUpdate("CREATE TRIGGER items_audit AFTER INSERT ON items "
+                    + "BEGIN INSERT INTO item_audit VALUES (new.id); END"));
+            assertEquals(1, statement.executeUpdate("INSERT INTO items(name) VALUES ('triggered')"));
+            assertEquals(1L, statement.executeLargeUpdate("INSERT INTO items(name) VALUES ('large')"));
+            assertEquals(1L, statement.getLargeUpdateCount());
+            statement.addBatch("INSERT INTO items(name) VALUES ('large-batch')");
+            assertArrayEquals(new long[] {1L}, statement.executeLargeBatch());
+            statement.setLargeMaxRows(25);
+            assertEquals(25L, statement.getLargeMaxRows());
+            statement.setLargeMaxRows(0);
+
+            ResultSet batchPredecessor = statement.executeQuery("SELECT 1");
+            statement.addBatch("UPDATE items SET name = name WHERE 0");
+            assertArrayEquals(new int[] {0}, statement.executeBatch());
+            assertTrue(batchPredecessor.isClosed());
+
             connection.setAutoCommit(false);
             assertEquals(1, statement.executeUpdate("INSERT INTO items(name) VALUES ('rolled back')"));
             connection.rollback();
             assertFalse(connection.getAutoCommit());
 
             try (ResultSet resultSet = statement.executeQuery(
-                    "SELECT id, name, NULL AS missing, X'0001FF' AS payload FROM items ORDER BY id")) {
+                    "SELECT id, name, NULL AS missing, X'0001FF' AS payload FROM items WHERE id <= 2 ORDER BY id")) {
                 assertTrue(resultSet.isBeforeFirst());
                 assertTrue(resultSet.next());
                 assertEquals(1L, resultSet.getLong("id"));
                 assertEquals("updated", resultSet.getString(2));
                 assertEquals(null, resultSet.getObject("missing"));
+                assertEquals(null, resultSet.getObject("missing", Long.class));
                 assertTrue(resultSet.wasNull());
                 assertArrayEquals(new byte[] {0, 1, -1}, resultSet.getBytes("payload"));
 
@@ -88,13 +111,26 @@ final class DriverIntegrationTest {
 
             assertTrue(statement.execute("SELECT count(*) AS item_count FROM items"));
             try (ResultSet resultSet = statement.getResultSet()) {
+                assertFalse(statement.getMoreResults(Statement.KEEP_CURRENT_RESULT));
+                assertFalse(resultSet.isClosed());
                 assertTrue(resultSet.next());
-                assertEquals(2, resultSet.getInt("item_count"));
+                assertEquals(5, resultSet.getInt("item_count"));
             }
 
             SQLException queryError = assertThrows(
                     SQLException.class, () -> statement.executeUpdate("SELECT * FROM items"));
             assertEquals("07000", queryError.getSQLState());
+            SQLException nulSql = assertThrows(SQLException.class, () -> statement.execute("SELECT 1\0; SELECT 2"));
+            assertEquals("42000", nulSql.getSQLState());
+            try (ResultSet overflow = statement.executeQuery("SELECT 128, 0.5, 'true', 'not-boolean'")) {
+                assertTrue(overflow.next());
+                SQLException rangeError = assertThrows(SQLException.class, () -> overflow.getByte(1));
+                assertEquals("22003", rangeError.getSQLState());
+                assertTrue(overflow.getBoolean(2));
+                assertTrue(overflow.getBoolean(3));
+                SQLException booleanError = assertThrows(SQLException.class, () -> overflow.getBoolean(4));
+                assertEquals("22018", booleanError.getSQLState());
+            }
         }
     }
 
@@ -125,6 +161,7 @@ final class DriverIntegrationTest {
 
                 insert.setLong(1, 3);
                 insert.setString(3, "third");
+                insert.setString(5, "embedded\0nul");
                 insert.addBatch();
                 assertArrayEquals(new int[] {1, 1}, insert.executeBatch());
 
@@ -145,6 +182,9 @@ final class DriverIntegrationTest {
                     assertEquals("note", rows.getString("note"));
                     assertTrue(rows.next());
                     assertEquals("third", rows.getString("name"));
+                    assertEquals("embedded\0nul", rows.getString("note"));
+                    assertEquals("656D626564646564006E756C", scalarString(connection,
+                            "SELECT hex(note) FROM typed_values WHERE id = 3"));
                     assertFalse(rows.next());
                 }
 
@@ -187,6 +227,19 @@ final class DriverIntegrationTest {
             try (ResultSet keys = statement.getGeneratedKeys()) {
                 assertFalse(keys.next());
             }
+
+            statement.executeUpdate("UPDATE generated_values SET value = 'updated'", Statement.RETURN_GENERATED_KEYS);
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                assertFalse(keys.next());
+            }
+
+            statement.executeUpdate("/* generated key */ WITH next(value) AS (VALUES('cte')) "
+                    + "INSERT INTO generated_values(value) SELECT value FROM next", Statement.RETURN_GENERATED_KEYS);
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                assertTrue(keys.next());
+                assertEquals(4, keys.getLong(1));
+                assertFalse(keys.next());
+            }
         }
     }
 
@@ -226,6 +279,10 @@ final class DriverIntegrationTest {
             statement.executeUpdate("CREATE TABLE metadata_children (tenant_id INTEGER, item_id INTEGER, "
                     + "FOREIGN KEY (tenant_id, item_id) REFERENCES metadata_items(tenant_id, item_id) ON DELETE CASCADE)");
             statement.executeUpdate("CREATE INDEX metadata_children_item_idx ON metadata_children(item_id)");
+            statement.executeUpdate("CREATE TABLE metadata_identity (id INTEGER PRIMARY KEY, base TEXT, "
+                    + "generated_value TEXT GENERATED ALWAYS AS (upper(base)))");
+            statement.executeUpdate("CREATE TABLE metadata_implicit (parent_id REFERENCES metadata_identity)");
+            statement.executeUpdate("CREATE TABLE edge_desc_pk (id INTEGER PRIMARY KEY DESC)");
 
             DatabaseMetaData metadata = connection.getMetaData();
             assertEquals("SQLite", metadata.getDatabaseProductName());
@@ -233,10 +290,20 @@ final class DriverIntegrationTest {
             assertTrue(metadata.supportsTransactions());
             assertTrue(metadata.supportsSavepoints());
             assertTrue(metadata.supportsGetGeneratedKeys());
+            assertFalse(metadata.supportsNamedParameters());
+            assertFalse(metadata.supportsConvert());
+            assertEquals(2000, metadata.getMaxColumnsInIndex());
 
             try (ResultSet tables = metadata.getTables(null, null, "metadata_%", new String[] {"TABLE", "VIEW"})) {
                 assertTrue(tables.next());
                 assertEquals("metadata_children", tables.getString("TABLE_NAME"));
+                assertEquals("main", tables.getString("TABLE_CAT"));
+                assertEquals("TABLE", tables.getString("TABLE_TYPE"));
+                assertTrue(tables.next());
+                assertEquals("metadata_identity", tables.getString("TABLE_NAME"));
+                assertEquals("TABLE", tables.getString("TABLE_TYPE"));
+                assertTrue(tables.next());
+                assertEquals("metadata_implicit", tables.getString("TABLE_NAME"));
                 assertEquals("TABLE", tables.getString("TABLE_TYPE"));
                 assertTrue(tables.next());
                 assertEquals("metadata_items", tables.getString("TABLE_NAME"));
@@ -250,11 +317,35 @@ final class DriverIntegrationTest {
             try (ResultSet columns = metadata.getColumns(null, null, "metadata_items", "%")) {
                 assertTrue(columns.next());
                 assertEquals("tenant_id", columns.getString("COLUMN_NAME"));
+                assertEquals("main", columns.getString("TABLE_CAT"));
                 assertEquals(java.sql.Types.BIGINT, columns.getInt("DATA_TYPE"));
+                assertEquals("YES", columns.getString("IS_NULLABLE"));
                 assertTrue(columns.next());
+                assertEquals("item_id", columns.getString("COLUMN_NAME"));
+                assertEquals("YES", columns.getString("IS_NULLABLE"));
                 assertTrue(columns.next());
                 assertEquals("name", columns.getString("COLUMN_NAME"));
                 assertEquals("NO", columns.getString("IS_NULLABLE"));
+                assertFalse(columns.next());
+            }
+
+            try (ResultSet columns = metadata.getColumns(null, null, "metadata_identity", "%")) {
+                assertTrue(columns.next());
+                assertEquals("id", columns.getString("COLUMN_NAME"));
+                assertEquals(DatabaseMetaData.columnNoNulls, columns.getInt("NULLABLE"));
+                assertEquals("NO", columns.getString("IS_NULLABLE"));
+                assertEquals("YES", columns.getString("IS_AUTOINCREMENT"));
+                assertTrue(columns.next());
+                assertTrue(columns.next());
+                assertEquals("generated_value", columns.getString("COLUMN_NAME"));
+                assertEquals("YES", columns.getString("IS_GENERATEDCOLUMN"));
+                assertFalse(columns.next());
+            }
+
+            try (ResultSet columns = metadata.getColumns(null, null, "edge_desc_pk", "id")) {
+                assertTrue(columns.next());
+                assertEquals("YES", columns.getString("IS_NULLABLE"));
+                assertEquals("NO", columns.getString("IS_AUTOINCREMENT"));
                 assertFalse(columns.next());
             }
 
@@ -271,10 +362,19 @@ final class DriverIntegrationTest {
             try (ResultSet imported = metadata.getImportedKeys(null, null, "metadata_children")) {
                 assertTrue(imported.next());
                 assertEquals("metadata_items", imported.getString("PKTABLE_NAME"));
+                assertEquals("main", imported.getString("PKTABLE_CAT"));
+                assertEquals("main", imported.getString("FKTABLE_CAT"));
                 assertEquals("tenant_id", imported.getString("FKCOLUMN_NAME"));
                 assertEquals(DatabaseMetaData.importedKeyCascade, imported.getInt("DELETE_RULE"));
                 assertTrue(imported.next());
                 assertEquals("item_id", imported.getString("FKCOLUMN_NAME"));
+                assertFalse(imported.next());
+            }
+
+            try (ResultSet imported = metadata.getImportedKeys(null, null, "metadata_implicit")) {
+                assertTrue(imported.next());
+                assertEquals("id", imported.getString("PKCOLUMN_NAME"));
+                assertEquals("parent_id", imported.getString("FKCOLUMN_NAME"));
                 assertFalse(imported.next());
             }
 
@@ -297,6 +397,25 @@ final class DriverIntegrationTest {
                 assertTrue(types.next());
                 assertEquals("INTEGER", types.getString("TYPE_NAME"));
             }
+            try (ResultSet procedures = metadata.getProcedures(null, null, "%")) {
+                assertEquals(9, procedures.getMetaData().getColumnCount());
+                assertFalse(procedures.next());
+            }
+            try (ResultSet procedureColumns = metadata.getProcedureColumns(null, null, "%", "%")) {
+                assertEquals(20, procedureColumns.getMetaData().getColumnCount());
+                assertFalse(procedureColumns.next());
+            }
+            try (ResultSet bestRow = metadata.getBestRowIdentifier(
+                    null, null, "metadata_items", DatabaseMetaData.bestRowSession, true)) {
+                assertEquals(8, bestRow.getMetaData().getColumnCount());
+                assertFalse(bestRow.next());
+            }
+            try (ResultSet clientInfo = metadata.getClientInfoProperties()) {
+                assertEquals(4, clientInfo.getMetaData().getColumnCount());
+                assertFalse(clientInfo.next());
+            }
+            assertFalse(metadata.supportsStatementPooling());
+            assertFalse(metadata.generatedKeyAlwaysReturned());
         }
     }
 
@@ -315,6 +434,14 @@ final class DriverIntegrationTest {
             assertThrows(SQLTimeoutException.class, () -> statement.executeQuery(
                     "WITH RECURSIVE counter(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM counter WHERE value < 1000000000) SELECT sum(value) FROM counter"));
             statement.setQueryTimeout(0);
+            try (PreparedStatement insert = connection.prepareStatement(
+                    "WITH RECURSIVE counter(value) AS (VALUES(0) UNION ALL "
+                            + "SELECT value + 1 FROM counter WHERE value < 100000000) "
+                            + "INSERT INTO unique_values SELECT value FROM counter")) {
+                insert.setQueryTimeout(1);
+                SQLTimeoutException timeout = assertThrows(SQLTimeoutException.class, insert::executeUpdate);
+                assertEquals("HYT00", timeout.getSQLState());
+            }
             try (ResultSet result = statement.executeQuery("SELECT 1")) {
                 assertTrue(result.next());
                 assertEquals(1, result.getInt(1));
@@ -364,6 +491,7 @@ final class DriverIntegrationTest {
             try (Connection connection = dataSource.getConnection()) {
                 assertTrue(connection.isReadOnly());
                 Statement statement = connection.createStatement();
+                assertEquals("1", scalarString(connection, "PRAGMA foreign_keys"));
                 ResultSet resultSet = statement.executeQuery("SELECT count(*) FROM parents");
                 assertTrue(resultSet.next());
                 assertEquals(0, resultSet.getInt(1));
@@ -407,8 +535,8 @@ final class DriverIntegrationTest {
                 insert.setClob(2, clob);
                 insert.setNClob(3, nclob);
                 insert.setSQLXML(4, xml);
-                insert.setObject(5, java.time.LocalDate.of(2026, 8, 5));
-                assertEquals(1, insert.executeUpdate());
+                insert.setObject(5, java.time.LocalDate.of(2026, 8, 5), JDBCType.DATE);
+                assertEquals(1L, insert.executeLargeUpdate());
             }
 
             try (ResultSet result = statement.executeQuery("SELECT * FROM rich_values")) {
@@ -419,6 +547,38 @@ final class DriverIntegrationTest {
                 assertEquals("<value>xml</value>", result.getSQLXML(4).getString());
                 assertEquals(java.time.LocalDate.of(2026, 8, 5), result.getObject(5, java.time.LocalDate.class));
             }
+        }
+    }
+
+    @Test
+    void appliesCalendarToTimestampConversions() throws Exception {
+        assumeNativeLibrary();
+
+        Calendar utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        Calendar plusEight = Calendar.getInstance(TimeZone.getTimeZone("GMT+08:00"));
+        Timestamp instant = Timestamp.from(Instant.parse("2026-08-05T12:34:56.123456789Z"));
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:");
+                PreparedStatement insert = connection.prepareStatement("SELECT ?")) {
+            insert.setTimestamp(1, instant, plusEight);
+            try (ResultSet result = insert.executeQuery()) {
+                assertTrue(result.next());
+                assertEquals("2026-08-05 20:34:56.123456789", result.getString(1));
+                assertEquals("2026-08-05", result.getDate(1).toString());
+                assertEquals("20:34:56", result.getTime(1).toString());
+                assertEquals(Instant.parse("2026-08-05T20:34:56.123456789Z"),
+                        result.getTimestamp(1, utc).toInstant());
+                assertEquals(instant.toInstant(), result.getTimestamp(1, plusEight).toInstant());
+            }
+            SQLException conversion = assertThrows(
+                    SQLException.class, () -> insert.setObject(1, "not-a-date", JDBCType.DATE));
+            assertEquals("22018", conversion.getSQLState());
+        }
+    }
+
+    private static String scalarString(Connection connection, String sql) throws SQLException {
+        try (Statement statement = connection.createStatement(); ResultSet result = statement.executeQuery(sql)) {
+            if (!result.next()) throw new SQLException("Scalar query returned no rows");
+            return result.getString(1);
         }
     }
 

@@ -19,7 +19,11 @@ final class SQLiteJdbcUrl {
         if (!accepts(url)) {
             throw new SQLException("Not a SQLite JDBC URL: " + url, "08001");
         }
-        return new SQLiteJdbcUrl(url.substring(PREFIX.length()));
+        String filename = url.substring(PREFIX.length());
+        if (filename.indexOf('\0') >= 0) {
+            throw new SQLException("SQLite JDBC URL cannot contain a NUL character", "08001");
+        }
+        return new SQLiteJdbcUrl(filename);
     }
 
     String filename() {

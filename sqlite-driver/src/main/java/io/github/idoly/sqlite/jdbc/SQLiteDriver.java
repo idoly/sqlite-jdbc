@@ -52,9 +52,7 @@ public final class SQLiteDriver implements Driver {
                     | NativeDatabase.OPEN_URI;
             database = NativeDatabase.open(jdbcUrl.filename(), openFlags);
             database.setBusyTimeoutMillis(config.busyTimeoutMillis());
-            if (!config.readOnly()) {
-                database.execute("PRAGMA foreign_keys = " + (config.foreignKeys() ? "ON" : "OFF"));
-            }
+            database.execute("PRAGMA foreign_keys = " + (config.foreignKeys() ? "ON" : "OFF"));
             return new SQLiteConnection(database, url, config.readOnly(), config.transactionMode());
         } catch (NativeException error) {
             closeAfterInitializationFailure(database, error);

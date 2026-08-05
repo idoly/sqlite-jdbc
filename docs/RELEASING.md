@@ -26,7 +26,7 @@ The workflow performs these steps:
 
 1. Changes the reactor version from `0.1.0-SNAPSHOT` to the tag version in each isolated runner workspace.
 2. Builds and tests all seven native classifiers on Linux, Windows, and macOS.
-3. Verifies that only the 29 prefixed `sqlitejdbc_*` symbols are exported.
+3. Verifies that only the 30 prefixed `sqlitejdbc_*` symbols are exported.
 4. Downloads exactly one JAR for every supported platform into the publish job.
 5. Builds Java binary, sources, and Javadoc JARs.
 6. Signs POMs and artifacts with GPG and uploads one deployment to Central Portal.

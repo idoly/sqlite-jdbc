@@ -64,7 +64,7 @@ macos-x86_64
 macos-aarch64
 ```
 
-Linux builds run in pinned containers. Windows and macOS release artifacts are built and tested on native GitHub runners. Cross-compilation alone is not considered runtime verification.
+Linux builds run from base-image manifest digests in containers. Windows and macOS release artifacts are built and tested on native GitHub runners. Cross-compilation alone is not considered runtime verification.
 
 Each platform is published as a `sqlite-native` classifier JAR containing:
 

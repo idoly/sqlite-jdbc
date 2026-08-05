@@ -36,8 +36,10 @@ final class FfmSQLiteNative implements SQLiteNative {
             "sqlitejdbc_busy_timeout", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
     private static final MethodHandle INTERRUPT = downcall(
             "sqlitejdbc_interrupt", FunctionDescriptor.ofVoid(ADDRESS));
-    private static final MethodHandle TOTAL_CHANGES = downcall(
-            "sqlitejdbc_total_changes", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+    private static final MethodHandle CHANGES = downcall(
+            "sqlitejdbc_changes", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+    private static final MethodHandle LAST_INSERT_ROWID = downcall(
+            "sqlitejdbc_last_insert_rowid", FunctionDescriptor.of(JAVA_LONG, ADDRESS));
     private static final MethodHandle PREPARE = downcall(
             "sqlitejdbc_prepare_v3",
             FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS));
@@ -154,9 +156,18 @@ final class FfmSQLiteNative implements SQLiteNative {
     }
 
     @Override
-    public int totalChanges(DatabaseHandle database) {
+    public int changes(DatabaseHandle database) {
         try {
-            return (int) TOTAL_CHANGES.invokeExact(address(database.address()));
+            return (int) CHANGES.invokeExact(address(database.address()));
+        } catch (Throwable error) {
+            throw invocationFailure(error);
+        }
+    }
+
+    @Override
+    public long lastInsertRowId(DatabaseHandle database) {
+        try {
+            return (long) LAST_INSERT_ROWID.invokeExact(address(database.address()));
         } catch (Throwable error) {
             throw invocationFailure(error);
         }
@@ -164,28 +175,28 @@ final class FfmSQLiteNative implements SQLiteNative {
 
     @Override
     public PrepareResult prepare(DatabaseHandle database, String sql) {
+        byte[] sqlBytes = sql.getBytes(StandardCharsets.UTF_8);
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment sqlUtf8 = arena.allocateFrom(sql);
+            MemorySegment sqlUtf8 = allocateBytes(arena, sqlBytes);
             MemorySegment statementOut = arena.allocate(ADDRESS);
             MemorySegment tailOut = arena.allocate(ADDRESS);
-            int resultCode = invokePrepare(database, sqlUtf8, statementOut, tailOut);
+            int resultCode = invokePrepare(database, sqlUtf8, sqlBytes.length, statementOut, tailOut);
             long statementAddress = statementOut.get(ADDRESS, 0).address();
             MemorySegment tailAddress = tailOut.get(ADDRESS, 0);
             if (resultCode != 0 || statementAddress == 0 || tailAddress.address() == 0) {
                 return new PrepareResult(resultCode, new StatementHandle(statementAddress));
             }
 
-            // The tail must point into the SQL allocation before it can be safely sliced.
             long tailOffset = tailAddress.address() - sqlUtf8.address();
-            if (tailOffset < 0 || tailOffset >= sqlUtf8.byteSize()) {
+            if (tailOffset < 0 || tailOffset > sqlBytes.length) {
                 nativeFinalize(statementAddress);
                 throw new IllegalStateException("SQLite returned a SQL tail outside the input buffer");
             }
-            String tailSql = sqlUtf8.asSlice(tailOffset).getString(0);
-            MemorySegment tailUtf8 = arena.allocateFrom(tailSql);
+            int tailLength = sqlBytes.length - Math.toIntExact(tailOffset);
+            MemorySegment tailUtf8 = allocateBytes(arena, sqlUtf8.asSlice(tailOffset, tailLength).toArray(JAVA_BYTE));
             MemorySegment tailStatementOut = arena.allocate(ADDRESS);
             MemorySegment tailEndOut = arena.allocate(ADDRESS);
-            int tailResult = invokePrepare(database, tailUtf8, tailStatementOut, tailEndOut);
+            int tailResult = invokePrepare(database, tailUtf8, tailLength, tailStatementOut, tailEndOut);
             long tailStatementAddress = tailStatementOut.get(ADDRESS, 0).address();
             if (tailResult != 0) {
                 if (tailStatementAddress != 0) nativeFinalize(tailStatementAddress);
@@ -268,9 +279,12 @@ final class FfmSQLiteNative implements SQLiteNative {
 
     @Override
     public int bindText(StatementHandle statement, int parameterIndex, String value) {
+        byte[] utf8 = value.getBytes(StandardCharsets.UTF_8);
         try (Arena arena = Arena.ofConfined()) {
+            MemorySegment text = arena.allocate(Math.max(1, utf8.length), 1);
+            if (utf8.length != 0) text.asSlice(0, utf8.length).copyFrom(MemorySegment.ofArray(utf8));
             return (int) BIND_TEXT.invokeExact(
-                    address(statement.address()), parameterIndex, arena.allocateFrom(value), -1, SQLITE_TRANSIENT);
+                    address(statement.address()), parameterIndex, text, utf8.length, SQLITE_TRANSIENT);
         } catch (Throwable error) {
             throw invocationFailure(error);
         }
@@ -391,9 +405,16 @@ final class FfmSQLiteNative implements SQLiteNative {
     }
 
     private static int invokePrepare(
-            DatabaseHandle database, MemorySegment sql, MemorySegment statementOut, MemorySegment tailOut) throws Throwable {
+            DatabaseHandle database, MemorySegment sql, int sqlLength,
+            MemorySegment statementOut, MemorySegment tailOut) throws Throwable {
         return (int) PREPARE.invokeExact(
-                address(database.address()), sql, -1, 0, statementOut, tailOut);
+                address(database.address()), sql, sqlLength, 0, statementOut, tailOut);
+    }
+
+    private static MemorySegment allocateBytes(Arena arena, byte[] bytes) {
+        MemorySegment allocation = arena.allocate(bytes.length + 1L, 1);
+        if (bytes.length != 0) allocation.asSlice(0, bytes.length).copyFrom(MemorySegment.ofArray(bytes));
+        return allocation;
     }
 
     private static int nativeFinalize(long statementAddress) {

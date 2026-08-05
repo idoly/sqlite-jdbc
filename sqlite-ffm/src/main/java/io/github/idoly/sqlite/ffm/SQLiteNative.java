@@ -64,9 +64,15 @@ public interface SQLiteNative {
 
     /**
      * @param database target database
-     * @return total number of rows changed since the database was opened
+     * @return number of rows changed directly by the most recently completed statement
      */
-    int totalChanges(DatabaseHandle database);
+    int changes(DatabaseHandle database);
+
+    /**
+     * @param database target database
+     * @return rowid from the most recent successful INSERT
+     */
+    long lastInsertRowId(DatabaseHandle database);
 
     /**
      * Prepares exactly one SQL statement, allowing only whitespace or comments after it.
@@ -84,8 +90,10 @@ public interface SQLiteNative {
     int step(StatementHandle statement);
 
     /**
+     * Resets a statement so it can be executed again.
+     *
      * @param statement statement to reset
-     * @return SQLite result code
+     * @return result code from the statement's most recent evaluation, as defined by {@code sqlite3_reset}
      */
     int reset(StatementHandle statement);
 

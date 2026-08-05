@@ -36,10 +36,12 @@ final class FfmSQLiteNativeTest {
         assertEquals(5, nativeApi.parameterCount(insert.statement()));
         assertEquals(0, nativeApi.bindLong(insert.statement(), 1, 42));
         assertEquals(0, nativeApi.bindDouble(insert.statement(), 2, 3.5));
-        assertEquals(0, nativeApi.bindText(insert.statement(), 3, "hello"));
+        assertEquals(0, nativeApi.bindText(insert.statement(), 3, "hello\0world"));
         assertEquals(0, nativeApi.bindBlob(insert.statement(), 4, new byte[] {0, 1, -1}));
         assertEquals(0, nativeApi.bindNull(insert.statement(), 5));
         assertEquals(101, nativeApi.step(insert.statement()));
+        assertEquals(1, nativeApi.changes(result.database()));
+        assertEquals(1, nativeApi.lastInsertRowId(result.database()));
         assertEquals(0, nativeApi.finalizeStatement(insert.statement()));
 
         PrepareResult commentOnlyTail = nativeApi.prepare(result.database(), "SELECT 1; -- allowed tail");
@@ -56,7 +58,7 @@ final class FfmSQLiteNativeTest {
         assertEquals(1, nativeApi.storageClass(select.statement(), 0));
         assertEquals(42, nativeApi.columnLong(select.statement(), 0));
         assertEquals(3.5, nativeApi.columnDouble(select.statement(), 1));
-        assertEquals("hello", nativeApi.columnText(select.statement(), 2));
+        assertEquals("hello\0world", nativeApi.columnText(select.statement(), 2));
         assertArrayEquals(new byte[] {0, 1, -1}, nativeApi.columnBlob(select.statement(), 3));
         assertEquals(5, nativeApi.storageClass(select.statement(), 4));
         assertNull(nativeApi.columnText(select.statement(), 4));

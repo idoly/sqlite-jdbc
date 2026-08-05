@@ -90,7 +90,12 @@ final class NativeDatabaseTest {
         public void interrupt(DatabaseHandle database) {}
 
         @Override
-        public int totalChanges(DatabaseHandle database) {
+        public int changes(DatabaseHandle database) {
+            return 0;
+        }
+
+        @Override
+        public long lastInsertRowId(DatabaseHandle database) {
             return 0;
         }
 

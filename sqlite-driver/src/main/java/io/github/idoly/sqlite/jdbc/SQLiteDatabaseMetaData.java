@@ -48,11 +48,11 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
 
     @Override public boolean usesLocalFiles() { return true; }
     @Override public boolean usesLocalFilePerTable() { return false; }
-    @Override public boolean supportsMixedCaseIdentifiers() { return true; }
+    @Override public boolean supportsMixedCaseIdentifiers() { return false; }
     @Override public boolean storesUpperCaseIdentifiers() { return false; }
     @Override public boolean storesLowerCaseIdentifiers() { return false; }
     @Override public boolean storesMixedCaseIdentifiers() { return true; }
-    @Override public boolean supportsMixedCaseQuotedIdentifiers() { return true; }
+    @Override public boolean supportsMixedCaseQuotedIdentifiers() { return false; }
     @Override public boolean storesUpperCaseQuotedIdentifiers() { return false; }
     @Override public boolean storesLowerCaseQuotedIdentifiers() { return false; }
     @Override public boolean storesMixedCaseQuotedIdentifiers() { return true; }
@@ -73,8 +73,8 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
     @Override public boolean supportsAlterTableWithDropColumn() { return true; }
     @Override public boolean supportsColumnAliasing() { return true; }
     @Override public boolean nullPlusNonNullIsNull() { return true; }
-    @Override public boolean supportsConvert() { return true; }
-    @Override public boolean supportsConvert(int fromType, int toType) { return true; }
+    @Override public boolean supportsConvert() { return false; }
+    @Override public boolean supportsConvert(int fromType, int toType) { return false; }
     @Override public boolean supportsTableCorrelationNames() { return true; }
     @Override public boolean supportsDifferentTableCorrelationNames() { return false; }
     @Override public boolean supportsExpressionsInOrderBy() { return true; }
@@ -92,7 +92,7 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
     @Override public boolean supportsANSI92EntryLevelSQL() { return false; }
     @Override public boolean supportsANSI92IntermediateSQL() { return false; }
     @Override public boolean supportsANSI92FullSQL() { return false; }
-    @Override public boolean supportsIntegrityEnhancementFacility() { return true; }
+    @Override public boolean supportsIntegrityEnhancementFacility() { return false; }
     @Override public boolean supportsOuterJoins() { return true; }
     @Override public boolean supportsFullOuterJoins() { return true; }
     @Override public boolean supportsLimitedOuterJoins() { return true; }
@@ -133,7 +133,7 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
     @Override public int getMaxCharLiteralLength() { return 0; }
     @Override public int getMaxColumnNameLength() { return 0; }
     @Override public int getMaxColumnsInGroupBy() { return 2000; }
-    @Override public int getMaxColumnsInIndex() { return 64; }
+    @Override public int getMaxColumnsInIndex() { return 2000; }
     @Override public int getMaxColumnsInOrderBy() { return 2000; }
     @Override public int getMaxColumnsInSelect() { return 2000; }
     @Override public int getMaxColumnsInTable() { return 2000; }
@@ -161,7 +161,7 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
     @Override public boolean dataDefinitionCausesTransactionCommit() { return false; }
     @Override public boolean dataDefinitionIgnoredInTransactions() { return false; }
     @Override public boolean supportsSavepoints() { return true; }
-    @Override public boolean supportsNamedParameters() { return true; }
+    @Override public boolean supportsNamedParameters() { return false; }
     @Override public boolean supportsMultipleOpenResults() { return false; }
     @Override public boolean supportsGetGeneratedKeys() { return true; }
     @Override public boolean supportsBatchUpdates() { return true; }
@@ -197,7 +197,7 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
         List<String> requestedTypes = normalizeTableTypes(types);
         if (requestedTypes.isEmpty()) return emptyTables();
         String placeholders = String.join(",", java.util.Collections.nCopies(requestedTypes.size(), "?"));
-        String sql = "SELECT NULL AS TABLE_CAT, NULL AS TABLE_SCHEM, name AS TABLE_NAME, "
+        String sql = "SELECT 'main' AS TABLE_CAT, NULL AS TABLE_SCHEM, name AS TABLE_NAME, "
                 + "CASE type WHEN 'view' THEN 'VIEW' ELSE 'TABLE' END AS TABLE_TYPE, "
                 + "NULL AS REMARKS, NULL AS TYPE_CAT, NULL AS TYPE_SCHEM, NULL AS TYPE_NAME, "
                 + "NULL AS SELF_REFERENCING_COL_NAME, NULL AS REF_GENERATION "
@@ -214,18 +214,30 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
     public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern)
             throws SQLException {
         if (!matchesCatalogAndSchema(catalog, schemaPattern)) return emptyColumns();
-        String sql = "SELECT NULL AS TABLE_CAT, NULL AS TABLE_SCHEM, s.name AS TABLE_NAME, p.name AS COLUMN_NAME, "
+        String rowIdPrimaryKey = "p.pk > 0 AND upper(trim(p.type)) = 'INTEGER' AND NOT EXISTS "
+                + "(SELECT 1 FROM pragma_index_list(s.name) primary_key_index "
+                + "WHERE primary_key_index.origin = 'pk')";
+        String nonNullable = "p.\"notnull\" = 1 OR (p.pk > 0 AND (tl.wr = 1 OR tl.strict = 1 OR ("
+                + rowIdPrimaryKey + ")))";
+        String sql = "SELECT 'main' AS TABLE_CAT, NULL AS TABLE_SCHEM, s.name AS TABLE_NAME, p.name AS COLUMN_NAME, "
                 + "CASE WHEN upper(p.type) LIKE '%INT%' THEN -5 "
+                + "WHEN upper(p.type) LIKE '%TIMESTAMP%' OR upper(p.type) LIKE '%DATETIME%' THEN 93 "
+                + "WHEN upper(trim(p.type)) = 'DATE' THEN 91 WHEN upper(trim(p.type)) = 'TIME' THEN 92 "
                 + "WHEN upper(p.type) LIKE '%REAL%' OR upper(p.type) LIKE '%FLOA%' OR upper(p.type) LIKE '%DOUB%' THEN 8 "
-                + "WHEN upper(p.type) LIKE '%BLOB%' THEN 2004 ELSE 12 END AS DATA_TYPE, "
+                + "WHEN upper(p.type) LIKE '%BOOL%' THEN 16 "
+                + "WHEN trim(p.type) = '' OR upper(p.type) LIKE '%BLOB%' THEN 2004 "
+                + "WHEN upper(p.type) LIKE '%CHAR%' OR upper(p.type) LIKE '%CLOB%' "
+                + "OR upper(p.type) LIKE '%TEXT%' THEN 12 ELSE 2 END AS DATA_TYPE, "
                 + "p.type AS TYPE_NAME, 0 AS COLUMN_SIZE, NULL AS BUFFER_LENGTH, 0 AS DECIMAL_DIGITS, "
-                + "10 AS NUM_PREC_RADIX, CASE p.\"notnull\" WHEN 1 THEN 0 ELSE 1 END AS NULLABLE, "
+                + "10 AS NUM_PREC_RADIX, CASE WHEN " + nonNullable + " THEN 0 ELSE 1 END AS NULLABLE, "
                 + "NULL AS REMARKS, p.dflt_value AS COLUMN_DEF, 0 AS SQL_DATA_TYPE, 0 AS SQL_DATETIME_SUB, "
                 + "0 AS CHAR_OCTET_LENGTH, p.cid + 1 AS ORDINAL_POSITION, "
-                + "CASE p.\"notnull\" WHEN 1 THEN 'NO' ELSE 'YES' END AS IS_NULLABLE, "
+                + "CASE WHEN " + nonNullable + " THEN 'NO' ELSE 'YES' END AS IS_NULLABLE, "
                 + "NULL AS SCOPE_CATALOG, NULL AS SCOPE_SCHEMA, NULL AS SCOPE_TABLE, NULL AS SOURCE_DATA_TYPE, "
-                + "'NO' AS IS_AUTOINCREMENT, 'NO' AS IS_GENERATEDCOLUMN "
+                + "CASE WHEN " + rowIdPrimaryKey + " AND tl.wr = 0 THEN 'YES' ELSE 'NO' END AS IS_AUTOINCREMENT, "
+                + "CASE WHEN p.hidden IN (2, 3) THEN 'YES' ELSE 'NO' END AS IS_GENERATEDCOLUMN "
                 + "FROM sqlite_schema s JOIN pragma_table_xinfo(s.name) p "
+                + "LEFT JOIN pragma_table_list tl ON tl.schema = 'main' AND tl.name = s.name "
                 + "WHERE s.type IN ('table','view') AND s.name LIKE ? ESCAPE '\\' "
                 + "AND p.name LIKE ? ESCAPE '\\' ORDER BY s.name, p.cid";
         return query(sql, pattern(tableNamePattern), pattern(columnNamePattern));
@@ -234,7 +246,7 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
     @Override
     public ResultSet getPrimaryKeys(String catalog, String schema, String table) throws SQLException {
         if (!matchesCatalogAndSchema(catalog, schema) || table == null) return emptyPrimaryKeys();
-        return query("SELECT NULL AS TABLE_CAT, NULL AS TABLE_SCHEM, ? AS TABLE_NAME, name AS COLUMN_NAME, "
+        return query("SELECT 'main' AS TABLE_CAT, NULL AS TABLE_SCHEM, ? AS TABLE_NAME, name AS COLUMN_NAME, "
                 + "pk AS KEY_SEQ, NULL AS PK_NAME FROM pragma_table_info(?) WHERE pk > 0 ORDER BY pk", table, table);
     }
 
@@ -271,49 +283,58 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
     @Override
     public ResultSet getProcedures(String catalog, String schemaPattern, String procedureNamePattern)
             throws SQLException {
-        return empty("PROCEDURE_CAT", "PROCEDURE_SCHEM", "PROCEDURE_NAME");
+        return empty("PROCEDURE_CAT", "PROCEDURE_SCHEM", "PROCEDURE_NAME", "RESERVED1", "RESERVED2",
+                "RESERVED3", "REMARKS", "PROCEDURE_TYPE", "SPECIFIC_NAME");
     }
 
     @Override
     public ResultSet getProcedureColumns(
             String catalog, String schemaPattern, String procedureNamePattern, String columnNamePattern)
             throws SQLException {
-        return empty("PROCEDURE_CAT", "PROCEDURE_SCHEM", "PROCEDURE_NAME", "COLUMN_NAME");
+        return empty("PROCEDURE_CAT", "PROCEDURE_SCHEM", "PROCEDURE_NAME", "COLUMN_NAME", "COLUMN_TYPE",
+                "DATA_TYPE", "TYPE_NAME", "PRECISION", "LENGTH", "SCALE", "RADIX", "NULLABLE", "REMARKS",
+                "COLUMN_DEF", "SQL_DATA_TYPE", "SQL_DATETIME_SUB", "CHAR_OCTET_LENGTH", "ORDINAL_POSITION",
+                "IS_NULLABLE", "SPECIFIC_NAME");
     }
 
     @Override
     public ResultSet getColumnPrivileges(
             String catalog, String schema, String table, String columnNamePattern) throws SQLException {
-        return empty("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME");
+        return empty("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "GRANTOR", "GRANTEE",
+                "PRIVILEGE", "IS_GRANTABLE");
     }
 
     @Override
     public ResultSet getTablePrivileges(String catalog, String schemaPattern, String tableNamePattern)
             throws SQLException {
-        return empty("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME");
+        return empty("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "GRANTOR", "GRANTEE", "PRIVILEGE",
+                "IS_GRANTABLE");
     }
     @Override
     public ResultSet getImportedKeys(String catalog, String schema, String table) throws SQLException {
         if (!matchesCatalogAndSchema(catalog, schema) || table == null) return emptyForeignKeys();
-        return query("SELECT NULL AS PKTABLE_CAT, NULL AS PKTABLE_SCHEM, f.\"table\" AS PKTABLE_NAME, "
-                + "f.\"to\" AS PKCOLUMN_NAME, NULL AS FKTABLE_CAT, NULL AS FKTABLE_SCHEM, ? AS FKTABLE_NAME, "
+        return query("SELECT 'main' AS PKTABLE_CAT, NULL AS PKTABLE_SCHEM, f.\"table\" AS PKTABLE_NAME, "
+                + "coalesce(f.\"to\", p.name) AS PKCOLUMN_NAME, 'main' AS FKTABLE_CAT, "
+                + "NULL AS FKTABLE_SCHEM, ? AS FKTABLE_NAME, "
                 + "f.\"from\" AS FKCOLUMN_NAME, f.seq + 1 AS KEY_SEQ, "
                 + foreignKeyRule("f.on_update") + " AS UPDATE_RULE, "
                 + foreignKeyRule("f.on_delete") + " AS DELETE_RULE, NULL AS FK_NAME, NULL AS PK_NAME, "
-                + importedKeyNotDeferrable + " AS DEFERRABILITY "
-                + "FROM pragma_foreign_key_list(?) f ORDER BY f.id, f.seq", table, table);
+                + importedKeyNotDeferrable + " AS DEFERRABILITY FROM pragma_foreign_key_list(?) f "
+                + "LEFT JOIN pragma_table_info(f.\"table\") p ON p.pk = f.seq + 1 ORDER BY f.id, f.seq", table, table);
     }
 
     @Override
     public ResultSet getExportedKeys(String catalog, String schema, String table) throws SQLException {
         if (!matchesCatalogAndSchema(catalog, schema) || table == null) return emptyForeignKeys();
-        return query("SELECT NULL AS PKTABLE_CAT, NULL AS PKTABLE_SCHEM, f.\"table\" AS PKTABLE_NAME, "
-                + "f.\"to\" AS PKCOLUMN_NAME, NULL AS FKTABLE_CAT, NULL AS FKTABLE_SCHEM, s.name AS FKTABLE_NAME, "
+        return query("SELECT 'main' AS PKTABLE_CAT, NULL AS PKTABLE_SCHEM, f.\"table\" AS PKTABLE_NAME, "
+                + "coalesce(f.\"to\", p.name) AS PKCOLUMN_NAME, 'main' AS FKTABLE_CAT, "
+                + "NULL AS FKTABLE_SCHEM, s.name AS FKTABLE_NAME, "
                 + "f.\"from\" AS FKCOLUMN_NAME, f.seq + 1 AS KEY_SEQ, "
                 + foreignKeyRule("f.on_update") + " AS UPDATE_RULE, "
                 + foreignKeyRule("f.on_delete") + " AS DELETE_RULE, NULL AS FK_NAME, NULL AS PK_NAME, "
                 + importedKeyNotDeferrable + " AS DEFERRABILITY "
                 + "FROM sqlite_schema s JOIN pragma_foreign_key_list(s.name) f "
+                + "LEFT JOIN pragma_table_info(f.\"table\") p ON p.pk = f.seq + 1 "
                 + "WHERE s.type = 'table' AND f.\"table\" = ? ORDER BY s.name, f.id, f.seq", table);
     }
 
@@ -324,12 +345,14 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
         if (!matchesCatalogAndSchema(parentCatalog, parentSchema)
                 || !matchesCatalogAndSchema(foreignCatalog, foreignSchema)
                 || parentTable == null || foreignTable == null) return emptyForeignKeys();
-        return query("SELECT NULL AS PKTABLE_CAT, NULL AS PKTABLE_SCHEM, f.\"table\" AS PKTABLE_NAME, "
-                + "f.\"to\" AS PKCOLUMN_NAME, NULL AS FKTABLE_CAT, NULL AS FKTABLE_SCHEM, ? AS FKTABLE_NAME, "
+        return query("SELECT 'main' AS PKTABLE_CAT, NULL AS PKTABLE_SCHEM, f.\"table\" AS PKTABLE_NAME, "
+                + "coalesce(f.\"to\", p.name) AS PKCOLUMN_NAME, 'main' AS FKTABLE_CAT, "
+                + "NULL AS FKTABLE_SCHEM, ? AS FKTABLE_NAME, "
                 + "f.\"from\" AS FKCOLUMN_NAME, f.seq + 1 AS KEY_SEQ, "
                 + foreignKeyRule("f.on_update") + " AS UPDATE_RULE, "
                 + foreignKeyRule("f.on_delete") + " AS DELETE_RULE, NULL AS FK_NAME, NULL AS PK_NAME, "
                 + importedKeyNotDeferrable + " AS DEFERRABILITY FROM pragma_foreign_key_list(?) f "
+                + "LEFT JOIN pragma_table_info(f.\"table\") p ON p.pk = f.seq + 1 "
                 + "WHERE f.\"table\" = ? ORDER BY f.id, f.seq", foreignTable, foreignTable, parentTable);
     }
 
@@ -340,7 +363,7 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
             return empty("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "NON_UNIQUE", "INDEX_QUALIFIER", "INDEX_NAME", "TYPE", "ORDINAL_POSITION", "COLUMN_NAME", "ASC_OR_DESC", "CARDINALITY", "PAGES", "FILTER_CONDITION");
         }
         String uniqueFilter = unique ? " AND il.\"unique\" = 1" : "";
-        return query("SELECT NULL AS TABLE_CAT, NULL AS TABLE_SCHEM, ? AS TABLE_NAME, "
+        return query("SELECT 'main' AS TABLE_CAT, NULL AS TABLE_SCHEM, ? AS TABLE_NAME, "
                 + "CASE il.\"unique\" WHEN 1 THEN 0 ELSE 1 END AS NON_UNIQUE, NULL AS INDEX_QUALIFIER, "
                 + "il.name AS INDEX_NAME, " + tableIndexOther + " AS TYPE, ii.seqno + 1 AS ORDINAL_POSITION, "
                 + "ii.name AS COLUMN_NAME, NULL AS ASC_OR_DESC, 0 AS CARDINALITY, 0 AS PAGES, "
@@ -351,46 +374,56 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
     @Override
     public ResultSet getUDTs(String catalog, String schemaPattern, String typeNamePattern, int[] types)
             throws SQLException {
-        return empty("TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME");
+        return empty("TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "CLASS_NAME", "DATA_TYPE", "REMARKS",
+                "BASE_TYPE");
     }
 
     @Override
     public ResultSet getSuperTypes(String catalog, String schemaPattern, String typeNamePattern)
             throws SQLException {
-        return empty("TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME");
+        return empty("TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "SUPERTYPE_CAT", "SUPERTYPE_SCHEM",
+                "SUPERTYPE_NAME");
     }
 
     @Override
     public ResultSet getSuperTables(String catalog, String schemaPattern, String tableNamePattern)
             throws SQLException {
-        return empty("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME");
+        return empty("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "SUPERTABLE_NAME");
     }
 
     @Override
     public ResultSet getAttributes(
             String catalog, String schemaPattern, String typeNamePattern, String attributeNamePattern)
             throws SQLException {
-        return empty("TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "ATTR_NAME");
+        return empty("TYPE_CAT", "TYPE_SCHEM", "TYPE_NAME", "ATTR_NAME", "DATA_TYPE", "ATTR_TYPE_NAME",
+                "ATTR_SIZE", "DECIMAL_DIGITS", "NUM_PREC_RADIX", "NULLABLE", "REMARKS", "ATTR_DEF",
+                "SQL_DATA_TYPE", "SQL_DATETIME_SUB", "CHAR_OCTET_LENGTH", "ORDINAL_POSITION", "IS_NULLABLE",
+                "SCOPE_CATALOG", "SCOPE_SCHEMA", "SCOPE_TABLE", "SOURCE_DATA_TYPE");
     }
 
     @Override
     public ResultSet getFunctions(String catalog, String schemaPattern, String functionNamePattern)
             throws SQLException {
-        return empty("FUNCTION_CAT", "FUNCTION_SCHEM", "FUNCTION_NAME");
+        return empty("FUNCTION_CAT", "FUNCTION_SCHEM", "FUNCTION_NAME", "REMARKS", "FUNCTION_TYPE",
+                "SPECIFIC_NAME");
     }
 
     @Override
     public ResultSet getFunctionColumns(
             String catalog, String schemaPattern, String functionNamePattern, String columnNamePattern)
             throws SQLException {
-        return empty("FUNCTION_CAT", "FUNCTION_SCHEM", "FUNCTION_NAME", "COLUMN_NAME");
+        return empty("FUNCTION_CAT", "FUNCTION_SCHEM", "FUNCTION_NAME", "COLUMN_NAME", "COLUMN_TYPE",
+                "DATA_TYPE", "TYPE_NAME", "PRECISION", "LENGTH", "SCALE", "RADIX", "NULLABLE", "REMARKS",
+                "CHAR_OCTET_LENGTH", "ORDINAL_POSITION", "IS_NULLABLE", "SPECIFIC_NAME");
     }
 
     @Override
     public ResultSet getPseudoColumns(
             String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern)
             throws SQLException {
-        return empty("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME");
+        return empty("TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "COLUMN_NAME", "DATA_TYPE", "COLUMN_SIZE",
+                "DECIMAL_DIGITS", "NUM_PREC_RADIX", "COLUMN_USAGE", "REMARKS", "CHAR_OCTET_LENGTH",
+                "IS_NULLABLE");
     }
 
     @Override public Connection getConnection() { return connection; }
@@ -401,6 +434,26 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
     @Override public long getMaxLogicalLobSize() { return 1_000_000_000L; }
     @Override public boolean supportsRefCursors() { return false; }
     @Override public boolean supportsSharding() { return false; }
+    @Override public boolean supportsStatementPooling() { return false; }
+    @Override public boolean generatedKeyAlwaysReturned() { return false; }
+
+    @Override
+    public ResultSet getBestRowIdentifier(
+            String catalog, String schema, String table, int scope, boolean nullable) throws SQLException {
+        return empty("SCOPE", "COLUMN_NAME", "DATA_TYPE", "TYPE_NAME", "COLUMN_SIZE", "BUFFER_LENGTH",
+                "DECIMAL_DIGITS", "PSEUDO_COLUMN");
+    }
+
+    @Override
+    public ResultSet getVersionColumns(String catalog, String schema, String table) throws SQLException {
+        return empty("SCOPE", "COLUMN_NAME", "DATA_TYPE", "TYPE_NAME", "COLUMN_SIZE", "BUFFER_LENGTH",
+                "DECIMAL_DIGITS", "PSEUDO_COLUMN");
+    }
+
+    @Override
+    public ResultSet getClientInfoProperties() throws SQLException {
+        return empty("NAME", "MAX_LEN", "DEFAULT_VALUE", "DESCRIPTION");
+    }
 
     @Override
     public <T> T unwrap(Class<T> type) throws SQLException {
@@ -418,7 +471,11 @@ final class SQLiteDatabaseMetaData extends DatabaseMetaDataAdapter {
             statement.closeOnCompletion();
             return statement.executeQuery();
         } catch (SQLException | RuntimeException error) {
-            statement.close();
+            try {
+                statement.close();
+            } catch (SQLException closeFailure) {
+                error.addSuppressed(closeFailure);
+            }
             throw error;
         }
     }
