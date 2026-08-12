@@ -55,7 +55,7 @@
         <automatic.module.name>io.github.idoly.sqlite.parent</automatic.module.name>
         <maven.compiler.release>25</maven.compiler.release>
         <junit.version>5.13.4</junit.version>
-        <maven.compiler.version>3.14.1</maven.compiler.version>
+        <maven.compiler.version>3.15.0</maven.compiler.version>
         <maven.surefire.version>3.5.3</maven.surefire.version>
         <maven.jar.version>3.5.0</maven.jar.version>
         <maven.enforcer.version>3.6.2</maven.enforcer.version>
