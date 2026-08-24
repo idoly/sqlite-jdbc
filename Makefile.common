@@ -20,7 +20,11 @@ $(shell mkdir -p $(dir $(JAVA_CLASSPATH)))
 ifeq ("$(wildcard $(JAVA_CLASSPATH))","")
 $(shell curl -L -f -o$(JAVA_CLASSPATH) https://search.maven.org/remotecontent?filepath=org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar)
 endif
-$(shell $(JAVAC) -cp $(JAVA_CLASSPATH) -sourcepath $(SRC) -d lib src/main/java/io/github/idoly/sqlite/util/OSInfo.java)
+$(shell $(JAVAC) -cp $(JAVA_CLASSPATH) -d lib \
+	src/main/java/io/github/idoly/sqlite/util/Logger.java \
+	src/main/java/io/github/idoly/sqlite/util/LoggerFactory.java \
+	src/main/java/io/github/idoly/sqlite/util/ProcessRunner.java \
+	src/main/java/io/github/idoly/sqlite/util/OSInfo.java)
 endif
 
 ifndef OS_NAME

@@ -246,6 +246,30 @@ public class ListenerTest {
     }
 
     @Test
+    public void listenerExceptionsDoNotCrossVoidSQLiteCallbacks() throws Exception {
+        connectionOne.addUpdateListener(
+                (type, database, table, rowId) -> {
+                    throw new IllegalStateException("update listener failure");
+                });
+        connectionOne.addCommitListener(
+                new SQLiteCommitListener() {
+                    @Override
+                    public void onCommit() {}
+
+                    @Override
+                    public void onRollback() {
+                        throw new IllegalStateException("rollback listener failure");
+                    }
+                });
+
+        try (Statement statement = connectionOne.createStatement()) {
+            statement.executeUpdate("INSERT INTO sample (description) VALUES ('callback safety')");
+        }
+        connectionOne.setAutoCommit(false);
+        connectionOne.rollback();
+    }
+
+    @Test
     public void testConnectionCloseWithAutoCommitDisabledAndCommitListener() throws Exception {
         CountingSQLiteCommitListener commitListener = new CountingSQLiteCommitListener();
         connectionOne.setAutoCommit(false);

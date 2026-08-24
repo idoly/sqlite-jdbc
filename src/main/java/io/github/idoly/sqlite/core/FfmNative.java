@@ -35,6 +35,13 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Direct JDK FFM binding to SQLite's public C ABI. */
 final class FfmNative {
     private static final long MAX_C_STRING_BYTES = 1024L * 1024L;
+    private static final int SQLITE_UTF8 = 1;
+    private static final int SQLITE_OPEN_READONLY = 0x00000001;
+    private static final int SQLITE_OPEN_READWRITE = 0x00000002;
+    private static final int SQLITE_OPEN_CREATE = 0x00000004;
+    private static final int SQLITE_OPEN_URI = 0x00000040;
+    private static final int SQLITE_DESERIALIZE_FREEONCLOSE = 0x00000001;
+    private static final int SQLITE_DESERIALIZE_RESIZEABLE = 0x00000002;
     private static final MemorySegment SQLITE_TRANSIENT = MemorySegment.ofAddress(-1);
     private static final Arena LIBRARY_ARENA = Arena.global();
     private static final Linker LINKER = Linker.nativeLinker();
@@ -646,8 +653,11 @@ final class FfmNative {
             throws SQLException {
         long fileDatabase =
                 open(
-                        filename.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                        (restore ? 1 : 2 | 4) | (filename.startsWith("file:") ? 64 : 0));
+                        filename.getBytes(StandardCharsets.UTF_8),
+                        (restore
+                                        ? SQLITE_OPEN_READONLY
+                                        : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
+                                | (filename.startsWith("file:") ? SQLITE_OPEN_URI : 0));
         long backup = 0;
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment main = arena.allocateFrom("main");
@@ -672,25 +682,28 @@ final class FfmNative {
             int timeouts = 0;
             do {
                 result = (int) BACKUP_STEP.invokeExact(address(backup), pagesPerStep);
-                if ((result == 0 || result == 101) && observer != null) {
+                if ((result == Codes.SQLITE_OK || result == Codes.SQLITE_DONE)
+                        && observer != null) {
                     int remaining = (int) BACKUP_REMAINING.invokeExact(address(backup));
                     int pageCount = (int) BACKUP_PAGE_COUNT.invokeExact(address(backup));
                     observer.progress(remaining, pageCount);
                 }
-                if (result == 5 || result == 6) {
+                if (result == Codes.SQLITE_BUSY || result == Codes.SQLITE_LOCKED) {
                     if (timeouts++ >= timeoutLimit) break;
                     try {
                         Thread.sleep(sleepTimeMillis);
                     } catch (InterruptedException interrupted) {
                         Thread.currentThread().interrupt();
-                        return 9;
+                        return Codes.SQLITE_INTERRUPT;
                     }
                 }
-            } while (result == 0 || result == 5 || result == 6);
+            } while (result == Codes.SQLITE_OK
+                    || result == Codes.SQLITE_BUSY
+                    || result == Codes.SQLITE_LOCKED);
 
             int finishResult = (int) BACKUP_FINISH.invokeExact(address(backup));
             backup = 0;
-            if (result != 101) return result;
+            if (result != Codes.SQLITE_DONE) return result;
             return finishResult;
         } catch (Throwable error) {
             throw failure(restore ? "restore database" : "backup database", error);
@@ -754,7 +767,7 @@ final class FfmNative {
                     CREATE_COLLATION.invokeExact(
                             address(database),
                             arena.allocateFrom(name),
-                            1,
+                            SQLITE_UTF8,
                             MemorySegment.NULL,
                             callback,
                             MemorySegment.NULL);
@@ -822,7 +835,7 @@ final class FfmNative {
             throws SQLException {
         FunctionRegistration registration = new FunctionRegistration(function);
         try (Arena strings = Arena.ofConfined()) {
-            int encoding = 1 | flags;
+            int encoding = SQLITE_UTF8 | flags;
             int result;
             if (function instanceof Function.Window) {
                 registration.step =
@@ -888,14 +901,14 @@ final class FfmNative {
         }
     }
 
-    static int destroyFunction(long database, String name) throws SQLException {
+    static int destroyFunction(long database, String name, int argumentCount) throws SQLException {
         try (Arena arena = Arena.ofConfined()) {
             return (int)
                     CREATE_FUNCTION.invokeExact(
                             address(database),
                             arena.allocateFrom(name),
-                            -1,
-                            1,
+                            argumentCount,
+                            SQLITE_UTF8,
                             MemorySegment.NULL,
                             MemorySegment.NULL,
                             MemorySegment.NULL,
@@ -1035,7 +1048,9 @@ final class FfmNative {
                                     address(database), arena.allocateFrom(schema), sizeOut, 0);
             if (data.address() == 0) {
                 int result = (int) ERROR_CODE.invokeExact(address(database));
-                throw DB.newSQLException(result == 0 ? 7 : result, "Serialization failed");
+                throw DB.newSQLException(
+                        result == Codes.SQLITE_OK ? Codes.SQLITE_NOMEM : result,
+                        "Serialization failed");
             }
             long size = sizeOut.get(JAVA_LONG, 0);
             try {
@@ -1065,7 +1080,7 @@ final class FfmNative {
                                     nativeBuffer,
                                     (long) buffer.length,
                                     (long) buffer.length,
-                                    3);
+                                    SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_RESIZEABLE);
             // SQLITE_DESERIALIZE_FREEONCLOSE transfers ownership even when SQLite rejects the
             // image.
             nativeBuffer = MemorySegment.NULL;
@@ -1160,7 +1175,11 @@ final class FfmNative {
             MemorySegment databaseName,
             MemorySegment tableName,
             long rowId) {
-        database.onUpdate(type, readCString(databaseName), readCString(tableName), rowId);
+        try {
+            database.onUpdate(type, readCString(databaseName), readCString(tableName), rowId);
+        } catch (Throwable ignoredFailure) {
+            // Exceptions cannot cross an upcall boundary.
+        }
     }
 
     private static int commitCallback(NativeDB database, MemorySegment ignored) {
@@ -1173,7 +1192,11 @@ final class FfmNative {
     }
 
     private static void rollbackCallback(NativeDB database, MemorySegment ignored) {
-        database.onCommit(false);
+        try {
+            database.onCommit(false);
+        } catch (Throwable ignoredFailure) {
+            // Exceptions cannot cross an upcall boundary.
+        }
     }
 
     private static void functionCallback(

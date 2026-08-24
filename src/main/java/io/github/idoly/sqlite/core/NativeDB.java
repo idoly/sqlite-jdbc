@@ -22,6 +22,7 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.text.MessageFormat;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /** SQLite backend implemented directly with the JDK Foreign Function and Memory API. */
@@ -37,7 +38,7 @@ public final class NativeDB extends DB {
     private final Arena callbackArena = Arena.ofShared();
     private final Map<String, MemorySegment> collationStubs = new HashMap<>();
     private final Map<String, Collation> collations = new HashMap<>();
-    private final Map<String, FfmNative.FunctionRegistration> functions = new HashMap<>();
+    private final Map<FunctionKey, FfmNative.FunctionRegistration> functions = new HashMap<>();
     private BusyHandler busyHandler;
     private MemorySegment busyHandlerStub = MemorySegment.NULL;
     private ProgressHandler progressHandler;
@@ -333,14 +334,14 @@ public final class NativeDB extends DB {
         FfmNative.FunctionRegistration registration =
                 FfmNative.createFunction(
                         callbackArena, databasePointer(), name, function, nArgs, flags);
-        functions.put(name, registration);
+        functions.put(FunctionKey.of(name, nArgs), registration);
         return SQLITE_OK;
     }
 
     @Override
-    public synchronized int destroy_function(String name) throws SQLException {
-        int result = FfmNative.destroyFunction(databasePointer(), name);
-        if (result == SQLITE_OK) functions.remove(name);
+    public synchronized int destroy_function(String name, int nArgs) throws SQLException {
+        int result = FfmNative.destroyFunction(databasePointer(), name, nArgs);
+        if (result == SQLITE_OK) functions.remove(FunctionKey.of(name, nArgs));
         return result;
     }
 
@@ -533,6 +534,12 @@ public final class NativeDB extends DB {
         byte[] bytes = new byte[buffer.remaining()];
         buffer.get(bytes);
         return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    private record FunctionKey(String name, int arguments) {
+        private static FunctionKey of(String name, int arguments) {
+            return new FunctionKey(name.toLowerCase(Locale.ROOT), arguments);
+        }
     }
 
     private long databasePointer() throws SQLException {

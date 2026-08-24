@@ -2533,13 +2533,6 @@ public abstract class BaseDatabaseMetaData extends CoreDatabaseMetaData {
     }
 
     /**
-     * @see java.lang.Object#finalize()
-     */
-    protected void finalize() throws Throwable {
-        close();
-    }
-
-    /**
      * Follow rules in <a href="https://www.sqlite.org/lang_keywords.html">SQLite Keywords</a>
      *
      * @param name Identifier name

@@ -2,7 +2,7 @@
 
 JDK 25+ 的 SQLite JDBC 4.3 驱动。
 
-== Dependency
+== 依赖
 
 [source,xml]
 ----

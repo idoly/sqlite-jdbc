@@ -1,6 +1,7 @@
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.data.Offset.offset;
 
 import java.sql.Connection;
@@ -396,6 +397,46 @@ public class UDFTest {
 
         Function.destroy(conn, "f1");
         Function.destroy(conn, "f1");
+    }
+
+    @Test
+    public void functionsCanBeOverloadedByArgumentCount() throws SQLException {
+        Function.create(
+                conn,
+                "overloaded",
+                new Function() {
+                    @Override
+                    protected void xFunc() throws SQLException {
+                        result(0);
+                    }
+                },
+                0,
+                0);
+        Function.create(
+                conn,
+                "OVERLOADED",
+                new Function() {
+                    @Override
+                    protected void xFunc() throws SQLException {
+                        result(value_int(0));
+                    }
+                },
+                1,
+                0);
+
+        try (ResultSet result = stat.executeQuery("select overloaded(), overloaded(7)")) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getInt(1)).isZero();
+            assertThat(result.getInt(2)).isEqualTo(7);
+        }
+
+        Function.destroy(conn, "Overloaded", 1);
+        assertThatThrownBy(() -> stat.executeQuery("select overloaded(7)"))
+                .isInstanceOf(SQLException.class);
+        try (ResultSet result = stat.executeQuery("select overloaded()")) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getInt(1)).isZero();
+        }
     }
 
     @Test

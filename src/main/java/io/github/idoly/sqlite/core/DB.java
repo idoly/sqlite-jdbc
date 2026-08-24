@@ -726,11 +726,12 @@ public abstract class DB implements Codes {
     /**
      * De-registers a user defined function
      *
-     * @param name Name of the function to de-registered.
+     * @param name Name of the function to deregister.
+     * @param nArgs Number of function arguments, or -1 for a variadic function.
      * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
      * @throws SQLException
      */
-    public abstract int destroy_function(String name) throws SQLException;
+    public abstract int destroy_function(String name, int nArgs) throws SQLException;
 
     /**
      * Create a user defined collation with given collation name and the collation object.
