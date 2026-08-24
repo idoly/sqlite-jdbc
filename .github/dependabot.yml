@@ -1,18 +1,14 @@
 version: 2
 updates:
-  - package-ecosystem: maven
-    directory: /
+
+  # Maintain dependencies for maven (pom.xml in root directory)
+  - package-ecosystem: "maven"
+    directory: "/"
     schedule:
-      interval: weekly
-  - package-ecosystem: github-actions
-    directory: /
+      interval: "weekly"
+
+  # Maintain dependencies for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
-      interval: weekly
-  - package-ecosystem: docker
-    directory: /containers/build-linux-glibc
-    schedule:
-      interval: weekly
-  - package-ecosystem: docker
-    directory: /containers/build-linux-musl
-    schedule:
-      interval: weekly
+      interval: "weekly"

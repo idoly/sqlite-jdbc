@@ -1,0 +1,227 @@
+include VERSION
+
+ifndef JAVA_HOME
+$(warning Set JAVA_HOME environment variable)
+endif
+
+JAVA  := "$$JAVA_HOME/bin/java"
+JAVAC := "$$JAVA_HOME/bin/javac"
+
+TARGET := target
+SRC:=src/main/java
+OSINFO_CLASS := org.sqlite.util.OSInfo
+OSINFO_PROG := lib/org/sqlite/util/OSInfo.class
+JAVA_CLASSPATH?=$(TARGET)/classpath/slf4j-api.jar
+
+## building OSInfo.java
+ifeq ("$(wildcard $(OSINFO_PROG))","")
+$(info Building OSInfo tool)
+$(shell mkdir -p $(dir $(JAVA_CLASSPATH)))
+ifeq ("$(wildcard $(JAVA_CLASSPATH))","")
+$(shell curl -L -f -o$(JAVA_CLASSPATH) https://search.maven.org/remotecontent?filepath=org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar)
+endif
+$(shell $(JAVAC) -cp $(JAVA_CLASSPATH) -sourcepath $(SRC) -d lib src/main/java/org/sqlite/util/OSInfo.java)
+endif
+
+ifndef OS_NAME
+OS_NAME := $(shell $(JAVA) -cp lib:$(JAVA_CLASSPATH) $(OSINFO_CLASS) --os)
+endif
+ifndef OS_ARCH
+OS_ARCH := $(shell $(JAVA) -cp lib:$(JAVA_CLASSPATH) $(OSINFO_CLASS) --arch)
+endif
+
+# Windows uses different path separators
+ifeq ($(OS_NAME),Windows)
+	sep := ;
+else
+	sep := :
+endif
+
+sqlite := sqlite-$(version)
+
+# os=Default is meant to be generic unix/linux
+
+known_targets := Linux-x86 Linux-x86_64 Linux-arm Linux-armv6 Linux-armv7 Linux-ppc64 Linux-riscv64 Mac-x86 Mac-x86_64 Mac-aarch64 DragonFly-x86_64 FreeBSD-x86 FreeBSD-x86_64 FreeBSD-aarch64 OpenBSD-x86_64 Windows-x86 Windows-x86_64 Windows-armv7 Windows-aarch64 SunOS-sparcv9 HPUX-ia64_32
+target := $(OS_NAME)-$(OS_ARCH)
+
+ifeq (,$(findstring $(strip $(target)),$(known_targets)))
+  target := Default
+endif
+
+$(info Will build using target: $(target) (detected os: $(OS_NAME), arch: $(OS_ARCH)))
+
+# cross-compilation toolchain prefix (e.g. "arm-linux-gnueabi-")
+CROSS_PREFIX :=
+
+Default_CC        := $(CROSS_PREFIX)gcc
+Default_STRIP     := $(CROSS_PREFIX)strip
+Default_CCFLAGS   := -Os -fPIC
+Default_LINKFLAGS := -shared -static-libgcc -pthread -lm
+Default_LIBNAME   := libsqlitejdbc.so
+Default_SQLITE_FLAGS  :=
+
+Linux-x86_CC        := $(CROSS_PREFIX)gcc
+Linux-x86_STRIP     := $(CROSS_PREFIX)strip
+Linux-x86_CCFLAGS   := -Os -fPIC -m32
+Linux-x86_LINKFLAGS := $(Default_LINKFLAGS)
+Linux-x86_LIBNAME   := libsqlitejdbc.so
+Linux-x86_SQLITE_FLAGS  :=
+
+Linux-x86_64_CC        := $(CROSS_PREFIX)gcc
+Linux-x86_64_STRIP     := $(CROSS_PREFIX)strip
+Linux-x86_64_CCFLAGS   := -Os -fPIC -m64
+Linux-x86_64_LINKFLAGS := $(Default_LINKFLAGS)
+Linux-x86_64_LIBNAME   := libsqlitejdbc.so
+Linux-x86_64_SQLITE_FLAGS  :=
+
+Linux-arm_CC          := $(CROSS_PREFIX)gcc
+Linux-arm_STRIP       := $(CROSS_PREFIX)strip
+Linux-arm_CCFLAGS     := -Os -fPIC -mfloat-abi=soft
+Linux-arm_LINKFLAGS   := $(Default_LINKFLAGS)
+Linux-arm_LIBNAME     := libsqlitejdbc.so
+Linux-arm_SQLITE_FLAGS  :=
+
+Linux-armv6_CC        := $(CROSS_PREFIX)gcc
+Linux-armv6_STRIP     := $(CROSS_PREFIX)strip
+Linux-armv6_CCFLAGS   := -Os -mfloat-abi=hard -mfpu=vfp -fPIC
+Linux-armv6_LINKFLAGS := $(Default_LINKFLAGS)
+Linux-armv6_LIBNAME   := libsqlitejdbc.so
+Linux-armv6_SQLITE_FLAGS  :=
+
+Linux-armv7_CC        := $(CROSS_PREFIX)gcc
+Linux-armv7_STRIP     := $(CROSS_PREFIX)strip
+Linux-armv7_CCFLAGS   := -Os -mfloat-abi=hard -mfpu=vfp -fPIC
+Linux-armv7_LINKFLAGS := $(Default_LINKFLAGS)
+Linux-armv7_LIBNAME   := libsqlitejdbc.so
+Linux-armv7_SQLITE_FLAGS  :=
+
+Linux-ppc64_CC        := $(CROSS_PREFIX)gcc
+Linux-ppc64_STRIP     := $(CROSS_PREFIX)strip
+Linux-ppc64_CCFLAGS   := -Os -fPIC
+Linux-ppc64_LINKFLAGS := $(Default_LINKFLAGS)
+Linux-ppc64_LIBNAME   := libsqlitejdbc.so
+Linux-ppc64_SQLITE_FLAGS  :=
+
+Linux-riscv64_CC        := $(CROSS_PREFIX)gcc
+Linux-riscv64_STRIP     := $(CROSS_PREFIX)strip
+Linux-riscv64_CCFLAGS   := -Os -fPIC
+Linux-riscv64_LINKFLAGS := $(Default_LINKFLAGS)
+Linux-riscv64_LIBNAME   := libsqlitejdbc.so
+Linux-riscv64_SQLITE_FLAGS  :=
+
+DragonFly-x86_64_CC        := $(CROSS_PREFIX)cc
+DragonFly-x86_64_STRIP     := $(CROSS_PREFIX)strip
+DragonFly-x86_64_CCFLAGS   := -O2 -fPIC
+DragonFly-x86_64_LINKFLAGS := -shared
+DragonFly-x86_64_LIBNAME   := libsqlitejdbc.so
+DragonFly-x86_64_SQLITE_FLAGS  :=
+
+FreeBSD-x86_CC        := $(CROSS_PREFIX)gcc
+FreeBSD-x86_STRIP     := $(CROSS_PREFIX)strip
+FreeBSD-x86_CCFLAGS   := -Os -fPIC
+FreeBSD-x86_LINKFLAGS := -shared
+FreeBSD-x86_LIBNAME   := libsqlitejdbc.so
+FreeBSD-x86_SQLITE_FLAGS  :=
+
+FreeBSD-x86_64_CC        := $(CROSS_PREFIX)gcc
+FreeBSD-x86_64_STRIP     := $(CROSS_PREFIX)strip
+FreeBSD-x86_64_CCFLAGS   := -Os -fPIC
+FreeBSD-x86_64_LINKFLAGS := -shared
+FreeBSD-x86_64_LIBNAME   := libsqlitejdbc.so
+FreeBSD-x86_64_SQLITE_FLAGS  :=
+
+FreeBSD-aarch64_CC        := $(CROSS_PREFIX)clang
+FreeBSD-aarch64_STRIP     := $(CROSS_PREFIX)strip
+FreeBSD-aarch64_CCFLAGS   := -Os -fPIC
+FreeBSD-aarch64_LINKFLAGS := -shared
+FreeBSD-aarch64_LIBNAME   := libsqlitejdbc.so
+FreeBSD-aarch64_SQLITE_FLAGS  :=
+
+OpenBSD-x86_64_CC        := $(CROSS_PREFIX)gcc
+OpenBSD-x86_64_STRIP     := $(CROSS_PREFIX)strip
+OpenBSD-x86_64_CCFLAGS   := -Os -fPIC
+OpenBSD-x86_64_LINKFLAGS := -shared
+OpenBSD-x86_64_LIBNAME   := libsqlitejdbc.so
+OpenBSD-x86_64_SQLITE_FLAGS  :=
+
+SunOS-sparcv9_CC        := $(CROSS_PREFIX)gcc
+SunOS-sparcv9_STRIP     := $(CROSS_PREFIX)strip
+SunOS-sparcv9_CCFLAGS   := -O2s-fPIC -m64
+SunOS-sparcv9_LINKFLAGS := -shared -static-libgcc
+SunOS-sparcv9_LIBNAME   := libsqlitejdbc.so
+SunOS-sparcv9_SQLITE_FLAGS  :=
+
+Mac-x86_CC        := gcc
+Mac-x86_STRIP     := strip -x
+Mac-x86_CCFLAGS    := -Os -fPIC -mmacosx-version-min=10.4
+Mac-x86_LINKFLAGS := -dynamiclib
+Mac-x86_LIBNAME   := libsqlitejdbc.dylib
+Mac-x86_SQLITE_FLAGS  := -DSQLITE_ENABLE_LOCKING_STYLE=0
+
+HPUX-ia64_32_CC			:= cc
+HPUX-ia64_32_STRIP		:= strip
+HPUX-ia64_32_CCFLAGS	:= +Osize +z
+HPUX-ia64_32_LINKFLAGS	:= -b
+HPUX-ia64_32_LIBNAME	:= libsqlitejdbc.so
+HPUX-ia64_32_SQLITE_FLAGS :=
+
+Mac-x86_64_CC        := gcc -arch $(OS_ARCH)
+Mac-x86_64_STRIP     := strip -x
+MAC_SDK := /Developer/SDKs/MacOSX10.10.sdk
+ifeq ($(wildcard MAC_SDK),)
+	MAC_SDK := /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.12.sdk
+endif
+Mac-x86_64_CCFLAGS    := -Os -fPIC -mmacosx-version-min=10.6 -Wno-implicit-function-declaration
+Mac-x86_64_LINKFLAGS := -dynamiclib
+Mac-x86_64_LIBNAME   := libsqlitejdbc.dylib
+Mac-x86_64_SQLITE_FLAGS  :=
+
+# Use a CROSS_PREFIX as the cross-triple clang is not available in crossbuild, see https://github.com/multiarch/crossbuild/blob/ad79cc84b6fb3fb1d09bc4a78719ef26f23bab85/Dockerfile#L134
+# When running on a M1 mac, CROSS_PREFIX will be empty, and 'make native' can still build
+Mac-aarch64_CC        := $(CROSS_PREFIX)clang
+Mac-aarch64_STRIP     := $(CROSS_PREFIX)strip -x
+MAC_SDK := /usr/osxcross/SDK/MacOSX11.3.sdk
+Mac-aarch64_CCFLAGS    := -Os -fPIC -mmacosx-version-min=10.9 -Wno-implicit-function-declaration
+Mac-aarch64_LINKFLAGS  := -dynamiclib
+Mac-aarch64_LIBNAME    := libsqlitejdbc.dylib
+Mac-aarch64_SQLITE_FLAGS :=
+
+Windows-x86_CC           := $(CROSS_PREFIX)gcc
+Windows-x86_STRIP        := $(CROSS_PREFIX)strip
+Windows-x86_CCFLAGS      := -Os
+Windows-x86_LINKFLAGS    := -Wl,--kill-at -shared -static-libgcc
+Windows-x86_LIBNAME      := sqlitejdbc.dll
+Windows-x86_SQLITE_FLAGS :=
+
+Windows-x86_64_CC           := $(CROSS_PREFIX)gcc
+Windows-x86_64_STRIP        := $(CROSS_PREFIX)strip
+Windows-x86_64_CCFLAGS      := -Os
+Windows-x86_64_LINKFLAGS    := -Wl,--kill-at -shared -static-libgcc
+Windows-x86_64_LIBNAME      := sqlitejdbc.dll
+Windows-x86_64_SQLITE_FLAGS :=
+
+Windows-armv7_CC           := $(CROSS_PREFIX)clang
+Windows-armv7_STRIP        := $(CROSS_PREFIX)strip
+Windows-armv7_CCFLAGS      := -Os
+Windows-armv7_LINKFLAGS    := -Wl,--kill-at -shared -static-libgcc
+Windows-armv7_LIBNAME      := sqlitejdbc.dll
+Windows-armv7_SQLITE_FLAGS :=
+
+Windows-aarch64_CC           := $(CROSS_PREFIX)clang
+Windows-aarch64_STRIP        := $(CROSS_PREFIX)strip
+Windows-aarch64_CCFLAGS      := -Os
+Windows-aarch64_LINKFLAGS    := -Wl,--kill-at -shared -static-libgcc
+Windows-aarch64_LIBNAME      := sqlitejdbc.dll
+Windows-aarch64_SQLITE_FLAGS :=
+
+
+CC        := $($(target)_CC)
+STRIP     := $($(target)_STRIP)
+CCFLAGS   := $($(target)_CCFLAGS)
+LINKFLAGS := $($(target)_LINKFLAGS)
+LIBNAME   := $($(target)_LIBNAME)
+SQLITE_FLAGS := $($(target)_SQLITE_FLAGS)
+SQLITE_SRC_PREFIX = sqlite-src-$(shell ./amalgamation_version.sh $(version))
+SQLITE_AMAL_PREFIX = sqlite-amalgamation-$(shell ./amalgamation_version.sh $(version))
+SQLITE_OLD_AMAL_PREFIX = sqlite-amalgamation-$(subst .,_,$(version))
+CCFLAGS := $(CCFLAGS)
