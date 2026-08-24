@@ -5,9 +5,6 @@ import io.github.idoly.sqlite.ExtendedCommand.SQLExtension;
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.core.CoreStatement;
 import io.github.idoly.sqlite.core.DB;
-import io.github.idoly.sqlite.core.DB.ProgressObserver;
-import io.github.idoly.sqlite.util.Logger;
-import io.github.idoly.sqlite.util.LoggerFactory;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -15,7 +12,6 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLWarning;
 import java.sql.Statement;
-import java.text.MessageFormat;
 import java.util.Arrays;
 
 public abstract class BaseStatement extends CoreStatement {
@@ -103,17 +99,6 @@ public abstract class BaseStatement extends CoreStatement {
 
                     return getResultSet();
                 });
-    }
-
-    static class BackupObserver implements ProgressObserver {
-        private static final Logger logger = LoggerFactory.getLogger(BackupObserver.class);
-
-        public void progress(int remaining, int pageCount) {
-            logger.info(
-                    () ->
-                            MessageFormat.format(
-                                    "remaining:{0}, page count:{1}", remaining, pageCount));
-        }
     }
 
     /**

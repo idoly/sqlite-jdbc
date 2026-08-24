@@ -7,13 +7,13 @@
  */
 package io.github.idoly.sqlite.core;
 
+import static java.lang.System.Logger.Level.DEBUG;
+
 import io.github.idoly.sqlite.BusyHandler;
 import io.github.idoly.sqlite.Collation;
 import io.github.idoly.sqlite.Function;
 import io.github.idoly.sqlite.ProgressHandler;
 import io.github.idoly.sqlite.SQLiteConfig;
-import io.github.idoly.sqlite.util.Logger;
-import io.github.idoly.sqlite.util.LoggerFactory;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -27,7 +27,7 @@ import java.util.Map;
 
 /** SQLite backend implemented directly with the JDK Foreign Function and Memory API. */
 public final class NativeDB extends DB {
-    private static final Logger logger = LoggerFactory.getLogger(NativeDB.class);
+    private static final System.Logger logger = System.getLogger(NativeDB.class.getName());
     private static final int DEFAULT_BACKUP_BUSY_SLEEP_TIME_MILLIS = 100;
     private static final int DEFAULT_BACKUP_NUM_BUSY_BEFORE_FAIL = 3;
     private static final int DEFAULT_PAGES_PER_BACKUP_STEP = 100;
@@ -86,7 +86,8 @@ public final class NativeDB extends DB {
 
     @Override
     public synchronized int _exec(String sql) throws SQLException {
-        logger.trace(
+        logger.log(
+                DEBUG,
                 () ->
                         MessageFormat.format(
                                 "DriverManager [{0}] [SQLite EXEC] {1}",
@@ -129,7 +130,8 @@ public final class NativeDB extends DB {
 
     @Override
     protected synchronized SafeStmtPtr prepare(String sql) throws SQLException {
-        logger.trace(
+        logger.log(
+                DEBUG,
                 () ->
                         MessageFormat.format(
                                 "DriverManager [{0}] [SQLite EXEC] {1}",

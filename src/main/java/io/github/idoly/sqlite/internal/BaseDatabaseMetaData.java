@@ -1,11 +1,11 @@
 package io.github.idoly.sqlite.internal;
 
+import static java.lang.System.Logger.Level.ERROR;
+
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.core.CoreDatabaseMetaData;
 import io.github.idoly.sqlite.core.CoreStatement;
 import io.github.idoly.sqlite.internal.BaseDatabaseMetaData.ImportedKeyFinder.ForeignKey;
-import io.github.idoly.sqlite.util.Logger;
-import io.github.idoly.sqlite.util.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
@@ -1274,14 +1274,14 @@ public abstract class BaseDatabaseMetaData extends CoreDatabaseMetaData {
                         try {
                             rsColAutoinc.close();
                         } catch (Exception e) {
-                            LogHolder.logger.error(() -> "Could not close ResultSet", e);
+                            LogHolder.logger.log(ERROR, "Could not close ResultSet", e);
                         }
                     }
                     if (statColAutoinc != null) {
                         try {
                             statColAutoinc.close();
                         } catch (Exception e) {
-                            LogHolder.logger.error(() -> "Could not close statement", e);
+                            LogHolder.logger.log(ERROR, "Could not close statement", e);
                         }
                     }
                 }
@@ -1435,7 +1435,7 @@ public abstract class BaseDatabaseMetaData extends CoreDatabaseMetaData {
                 try {
                     rs.close();
                 } catch (Exception e) {
-                    LogHolder.logger.error(() -> "Could not close ResultSet", e);
+                    LogHolder.logger.log(ERROR, "Could not close ResultSet", e);
                 }
             }
         }
@@ -2551,11 +2551,8 @@ public abstract class BaseDatabaseMetaData extends CoreDatabaseMetaData {
         return name;
     }
 
-    /**
-     * Class-wrapper around the logger object to avoid build-time initialization of the logging
-     * framework in native-image
-     */
     private static class LogHolder {
-        private static final Logger logger = LoggerFactory.getLogger(BaseDatabaseMetaData.class);
+        private static final System.Logger logger =
+                System.getLogger(BaseDatabaseMetaData.class.getName());
     }
 }

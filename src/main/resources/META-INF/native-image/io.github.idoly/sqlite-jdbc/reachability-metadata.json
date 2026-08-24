@@ -334,5 +334,28 @@
         ]
       }
     ]
-  }
+  },
+  "reflection": [
+    {
+      "type": {
+        "proxy": [
+          "java.sql.Statement"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "java.sql.PreparedStatement"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "java.sql.DatabaseMetaData"
+        ]
+      }
+    }
+  ]
 }

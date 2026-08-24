@@ -5,7 +5,6 @@ import io.github.idoly.sqlite.core.NativeDB;
 import io.github.idoly.sqlite.internal.BaseDatabaseMetaData;
 import io.github.idoly.sqlite.util.LibraryLoaderUtil;
 import io.github.idoly.sqlite.util.OSInfo;
-import io.github.idoly.sqlite.util.ProcessRunner;
 import java.lang.reflect.Method;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeClassInitialization;
@@ -18,7 +17,6 @@ public class SqliteJdbcFeature implements Feature {
         RuntimeClassInitialization.initializeAtBuildTime(SQLiteJDBCLoader.VersionHolder.class);
         RuntimeClassInitialization.initializeAtBuildTime(BaseDatabaseMetaData.class);
         RuntimeClassInitialization.initializeAtBuildTime(OSInfo.class);
-        RuntimeClassInitialization.initializeAtBuildTime(ProcessRunner.class);
         RuntimeClassInitialization.initializeAtBuildTime(LibraryLoaderUtil.class);
         a.registerReachabilityHandler(this::nativeDbReachable, method(NativeDB.class, "load"));
     }

@@ -38,7 +38,6 @@ import java.util.stream.Stream;
  * @author leo
  */
 public class OSInfo {
-    protected static ProcessRunner processRunner = new ProcessRunner();
     private static final HashMap<String, String> archMapping = new HashMap<>();
 
     public static final String X86 = "x86";
@@ -79,7 +78,6 @@ public class OSInfo {
         archMapping.put("power_pc", PPC);
         archMapping.put("power_rs", PPC);
 
-        // TODO: PowerPC 64bit mappings
         archMapping.put(PPC64, PPC64);
         archMapping.put("power64", PPC64);
         archMapping.put("powerpc64", PPC64);
@@ -147,76 +145,19 @@ public class OSInfo {
     }
 
     static String getHardwareName() {
-        try {
-            return processRunner.runAndWaitFor("uname -m");
-        } catch (Throwable e) {
-            LogHolder.logger.error(() -> "Error while running uname -m", e);
-            return "unknown";
-        }
+        return System.getProperty("os.arch", "unknown");
     }
 
     static String resolveArmArchType() {
-        if (System.getProperty("os.name").contains("Linux")) {
-            String armType = getHardwareName();
-            // armType (uname -m) can be armv5t, armv5te, armv5tej, armv5tejl, armv6, armv7, armv7l,
-            // aarch64, i686
-
-            if (armType.startsWith("armv6")) {
-                // Raspberry PI
-                return "armv6";
-            } else if (armType.startsWith("armv7")) {
-                // Generic
-                return "armv7";
-            } else if (armType.startsWith("armv5")) {
-                // Use armv5, soft-float ABI
-                return "arm";
-            } else if (armType.startsWith("aarch64")) {
-                boolean is32bitJVM = "32".equals(System.getProperty("sun.arch.data.model"));
-                if (is32bitJVM) {
-                    // An aarch64 architecture should support armv7
-                    return "armv7";
-                } else {
-                    // Use arm64
-                    return "aarch64";
-                }
-            }
-
-            // Java 1.8 introduces a system property to determine armel or armhf
-            // https://bugs.openjdk.org/browse/JDK-8005545
-            String abi = System.getProperty("sun.arch.abi");
-            if (abi != null && abi.startsWith("gnueabihf")) {
-                return "armv7";
-            }
-
-            // For java7, we still need to run some shell commands to determine ABI of JVM
-            String javaHome = System.getProperty("java.home");
-            try {
-                // determine if first JVM found uses ARM hard-float ABI
-                int exitCode = Runtime.getRuntime().exec("which readelf").waitFor();
-                if (exitCode == 0) {
-                    String[] cmdarray = {
-                        "/bin/sh",
-                        "-c",
-                        "find '"
-                                + javaHome
-                                + "' -name 'libjvm.so' | head -1 | xargs readelf -A | "
-                                + "grep 'Tag_ABI_VFP_args: VFP registers'"
-                    };
-                    exitCode = Runtime.getRuntime().exec(cmdarray).waitFor();
-                    if (exitCode == 0) {
-                        return "armv7";
-                    }
-                } else {
-                    LogHolder.logger.warn(
-                            () ->
-                                    "readelf not found. Cannot check if running on an armhf system, armel architecture will be presumed");
-                }
-            } catch (IOException | InterruptedException e) {
-                // ignored: fall back to "arm" arch (soft-float ABI)
-            }
+        String architecture = getHardwareName().toLowerCase(Locale.ROOT);
+        if (architecture.startsWith("armv6")) return "armv6";
+        if (architecture.startsWith("armv7")) return "armv7";
+        if (architecture.startsWith("aarch64") || architecture.startsWith("arm64")) {
+            return "32".equals(System.getProperty("sun.arch.data.model")) ? "armv7" : "aarch64";
         }
-        // Use armv5, soft-float ABI
-        return "arm";
+
+        String abi = System.getProperty("sun.arch.abi", "");
+        return abi.startsWith("gnueabihf") ? "armv7" : "arm";
     }
 
     public static String getArchName() {
@@ -254,13 +195,5 @@ public class OSInfo {
 
     static String translateArchNameToFolderName(String archName) {
         return archName.replaceAll("\\W", "");
-    }
-
-    /**
-     * Class-wrapper around the logger object to avoid build-time initialization of the logging
-     * framework in native-image
-     */
-    private static class LogHolder {
-        private static final Logger logger = LoggerFactory.getLogger(OSInfo.class);
     }
 }

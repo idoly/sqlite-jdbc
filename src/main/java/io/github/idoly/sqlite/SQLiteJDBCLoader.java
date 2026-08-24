@@ -15,8 +15,9 @@
  *--------------------------------------------------------------------------*/
 package io.github.idoly.sqlite;
 
+import static java.lang.System.Logger.Level.ERROR;
+
 import io.github.idoly.sqlite.core.NativeDB;
-import io.github.idoly.sqlite.util.LoggerFactory;
 import java.io.IOException;
 import java.net.URL;
 import java.text.MessageFormat;
@@ -68,12 +69,11 @@ public final class SQLiteJDBCLoader {
                 }
             } catch (IOException error) {
                 URL failedFile = versionFile;
-                LoggerFactory.getLogger(VersionHolder.class)
-                        .error(
-                                () ->
-                                        MessageFormat.format(
-                                                "Could not read version from file: {0}",
-                                                failedFile),
+                System.getLogger(VersionHolder.class.getName())
+                        .log(
+                                ERROR,
+                                MessageFormat.format(
+                                        "Could not read version from file: {0}", failedFile),
                                 error);
             }
             return version;

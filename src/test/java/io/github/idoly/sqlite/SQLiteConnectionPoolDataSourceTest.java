@@ -18,17 +18,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.idoly.sqlite.javax.SQLiteConnectionPoolDataSource;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.sql.ConnectionEvent;
 import javax.sql.ConnectionEventListener;
 import javax.sql.ConnectionPoolDataSource;
 import javax.sql.PooledConnection;
-import org.junit.jupiter.api.Disabled;
+import javax.sql.StatementEvent;
+import javax.sql.StatementEventListener;
 import org.junit.jupiter.api.Test;
 
 public class SQLiteConnectionPoolDataSourceTest {
@@ -128,22 +131,108 @@ public class SQLiteConnectionPoolDataSourceTest {
         public void connectionErrorOccurred(ConnectionEvent event) {}
     }
 
-    @Disabled
     @Test
-    public void proxyConnectionCloseTest() throws SQLException {
+    public void replacingHandleDoesNotReturnAnInUseConnectionToThePool() throws SQLException {
         ConnectionPoolDataSource ds = new SQLiteConnectionPoolDataSource();
-        PooledConnection pooledConn = ds.getPooledConnection();
-        System.out.println("pooledConn: " + pooledConn.getClass());
+        PooledConnection pooled = ds.getPooledConnection();
+        AtomicInteger closeEvents = new AtomicInteger();
+        pooled.addConnectionEventListener(
+                new ConnectionEventListener() {
+                    @Override
+                    public void connectionClosed(ConnectionEvent event) {
+                        closeEvents.incrementAndGet();
+                    }
 
-        Connection handle = pooledConn.getConnection();
-        System.out.println("pooledConn.getConnection: " + handle.getClass());
+                    @Override
+                    public void connectionErrorOccurred(ConnectionEvent event) {}
+                });
+        try {
+            Connection first = pooled.getConnection();
+            Connection second = pooled.getConnection();
+            assertThat(first.isClosed()).isTrue();
+            assertThat(closeEvents).hasValue(0);
 
-        Statement st = handle.createStatement();
-        System.out.println("statement: " + st.getClass());
-        Connection stConn = handle.createStatement().getConnection();
-        System.out.println("statement connection:" + stConn.getClass());
-        stConn.close(); // This closes the physical connection, not the proxy
+            second.close();
+            assertThat(closeEvents).hasValue(1);
+        } finally {
+            pooled.close();
+        }
+    }
 
-        Connection handle2 = pooledConn.getConnection();
+    @Test
+    public void statementsAndMetadataDoNotExposeThePhysicalConnection() throws SQLException {
+        ConnectionPoolDataSource ds = new SQLiteConnectionPoolDataSource();
+        PooledConnection pooled = ds.getPooledConnection();
+        try {
+            Connection handle = pooled.getConnection();
+            try (Statement statement = handle.createStatement()) {
+                assertThat(statement.getConnection()).isSameAs(handle);
+            }
+            assertThat(handle.getMetaData().getConnection()).isSameAs(handle);
+
+            handle.createStatement().getConnection().close();
+            assertThat(handle.isClosed()).isTrue();
+            try (Connection next = pooled.getConnection();
+                    Statement statement = next.createStatement()) {
+                assertThat(statement.execute("select 1")).isTrue();
+            }
+        } finally {
+            pooled.close();
+        }
+    }
+
+    @Test
+    public void returningHandleRollsBackAndClosesItsStatements() throws SQLException {
+        ConnectionPoolDataSource ds = new SQLiteConnectionPoolDataSource();
+        PooledConnection pooled = ds.getPooledConnection();
+        try {
+            Connection handle = pooled.getConnection();
+            Statement statement = handle.createStatement();
+            statement.execute("create table pooled_test(value)");
+            handle.setTransactionIsolation(Connection.TRANSACTION_READ_UNCOMMITTED);
+            handle.setAutoCommit(false);
+            statement.executeUpdate("insert into pooled_test values (1)");
+            handle.close();
+
+            assertThat(statement.isClosed()).isTrue();
+            try (Connection next = pooled.getConnection();
+                    Statement query = next.createStatement();
+                    var result = query.executeQuery("select count(*) from pooled_test")) {
+                assertThat(next.getAutoCommit()).isTrue();
+                assertThat(next.getTransactionIsolation())
+                        .isEqualTo(Connection.TRANSACTION_SERIALIZABLE);
+                assertThat(result.next()).isTrue();
+                assertThat(result.getInt(1)).isZero();
+            }
+        } finally {
+            pooled.close();
+        }
+    }
+
+    @Test
+    public void preparedStatementCloseNotifiesListeners() throws SQLException {
+        ConnectionPoolDataSource ds = new SQLiteConnectionPoolDataSource();
+        PooledConnection pooled = ds.getPooledConnection();
+        try {
+            AtomicInteger closedStatements = new AtomicInteger();
+            pooled.addStatementEventListener(
+                    new StatementEventListener() {
+                        @Override
+                        public void statementClosed(StatementEvent event) {
+                            closedStatements.incrementAndGet();
+                        }
+
+                        @Override
+                        public void statementErrorOccurred(StatementEvent event) {}
+                    });
+
+            try (Connection handle = pooled.getConnection();
+                    PreparedStatement statement = handle.prepareStatement("select 1")) {
+                assertThat(statement.execute()).isTrue();
+            }
+            assertThat(closedStatements).hasValue(1);
+        } finally {
+            pooled.close();
+        }
     }
 }

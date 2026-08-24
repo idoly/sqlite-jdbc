@@ -112,4 +112,17 @@ public class OSInfoTest {
         assertThat(OSInfo.getArchName()).isEqualTo("overridden");
         assertThat(OSInfo.getNativeLibFolderPathForCurrentOS()).isEqualTo("Windows/overridden");
     }
+
+    @Test
+    @SetSystemProperty(key = "os.arch", value = "armv7l")
+    void armV7ArchitectureUsesJdkProperties() {
+        assertThat(OSInfo.getArchName()).isEqualTo("armv7");
+    }
+
+    @Test
+    @SetSystemProperty(key = "os.arch", value = "arm64")
+    @SetSystemProperty(key = "sun.arch.data.model", value = "64")
+    void arm64ArchitectureUsesJdkProperties() {
+        assertThat(OSInfo.getArchName()).isEqualTo("aarch64");
+    }
 }

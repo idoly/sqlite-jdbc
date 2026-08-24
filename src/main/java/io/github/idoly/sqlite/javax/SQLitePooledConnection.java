@@ -14,460 +14,382 @@
 package io.github.idoly.sqlite.javax;
 
 import io.github.idoly.sqlite.SQLiteConnection;
-import io.github.idoly.sqlite.core.DB;
-import io.github.idoly.sqlite.internal.PooledConnectionImpl;
-import io.github.idoly.sqlite.internal.PreparedStatementImpl;
-import io.github.idoly.sqlite.internal.StatementImpl;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.sql.Array;
-import java.sql.Blob;
-import java.sql.CallableStatement;
-import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.NClob;
 import java.sql.PreparedStatement;
-import java.sql.SQLClientInfoException;
 import java.sql.SQLException;
-import java.sql.SQLWarning;
-import java.sql.SQLXML;
-import java.sql.Savepoint;
 import java.sql.Statement;
-import java.sql.Struct;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.Executor;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.ConnectionEvent;
 import javax.sql.ConnectionEventListener;
+import javax.sql.PooledConnection;
+import javax.sql.StatementEvent;
+import javax.sql.StatementEventListener;
 
-public class SQLitePooledConnection extends PooledConnectionImpl {
+/** A pooled physical SQLite connection with replaceable logical connection handles. */
+public final class SQLitePooledConnection implements PooledConnection {
+    private final CopyOnWriteArrayList<ConnectionEventListener> connectionListeners =
+            new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<StatementEventListener> statementListeners =
+            new CopyOnWriteArrayList<>();
 
-    protected SQLiteConnection physicalConn;
-    protected volatile Connection handleConn;
+    private SQLiteConnection physicalConnection;
+    private LogicalConnection logicalConnection;
+    private final int defaultTransactionIsolation;
 
-    protected List<ConnectionEventListener> listeners = new ArrayList<ConnectionEventListener>();
-
-    /**
-     * Constructor.
-     *
-     * @param physicalConn The physical Connection.
-     */
-    protected SQLitePooledConnection(SQLiteConnection physicalConn) {
-        this.physicalConn = physicalConn;
+    SQLitePooledConnection(SQLiteConnection physicalConnection) {
+        this.physicalConnection = physicalConnection;
+        defaultTransactionIsolation = physicalConnection.getTransactionIsolation();
     }
 
-    public SQLiteConnection getPhysicalConn() {
-        return physicalConn;
+    @Override
+    public synchronized Connection getConnection() throws SQLException {
+        SQLiteConnection physical = requirePhysicalConnection();
+        if (logicalConnection != null) {
+            logicalConnection.close(false);
+        }
+        logicalConnection = new LogicalConnection(physical);
+        return logicalConnection.proxy();
     }
 
-    /**
-     * @see javax.sql.PooledConnection#close()
-     */
-    public void close() throws SQLException {
-        if (handleConn != null) {
-            listeners.clear();
-            handleConn.close();
+    @Override
+    public synchronized void close() throws SQLException {
+        if (physicalConnection == null) return;
+
+        SQLiteConnection physical = physicalConnection;
+        SQLException failure = null;
+        if (logicalConnection != null) {
+            try {
+                logicalConnection.invalidate();
+            } catch (SQLException error) {
+                failure = append(failure, error);
+            }
+            logicalConnection = null;
         }
 
-        if (physicalConn != null) {
+        try {
+            physical.close();
+        } catch (SQLException error) {
+            failure = append(failure, error);
+        } finally {
+            physicalConnection = null;
+            connectionListeners.clear();
+            statementListeners.clear();
+        }
+        if (failure != null) throw failure;
+    }
+
+    @Override
+    public void addConnectionEventListener(ConnectionEventListener listener) {
+        if (listener != null) connectionListeners.add(listener);
+    }
+
+    @Override
+    public void removeConnectionEventListener(ConnectionEventListener listener) {
+        connectionListeners.remove(listener);
+    }
+
+    @Override
+    public void addStatementEventListener(StatementEventListener listener) {
+        if (listener != null) statementListeners.add(listener);
+    }
+
+    @Override
+    public void removeStatementEventListener(StatementEventListener listener) {
+        statementListeners.remove(listener);
+    }
+
+    private SQLiteConnection requirePhysicalConnection() throws SQLException {
+        if (physicalConnection == null || physicalConnection.isClosed()) {
+            throw new SQLException("Pooled connection is closed");
+        }
+        return physicalConnection;
+    }
+
+    private void detach(LogicalConnection connection) {
+        connection.closed.set(true);
+        if (logicalConnection == connection) logicalConnection = null;
+    }
+
+    private void fireConnectionClosed() {
+        ConnectionEvent event = new ConnectionEvent(this);
+        for (ConnectionEventListener listener : connectionListeners) {
+            listener.connectionClosed(event);
+        }
+    }
+
+    private void fireConnectionError(SQLException error) {
+        ConnectionEvent event = new ConnectionEvent(this, error);
+        for (ConnectionEventListener listener : connectionListeners) {
+            listener.connectionErrorOccurred(event);
+        }
+    }
+
+    private final class LogicalConnection implements InvocationHandler {
+        private final SQLiteConnection physical;
+        private final AtomicBoolean closed = new AtomicBoolean();
+        private final AtomicBoolean errorReported = new AtomicBoolean();
+        private final Set<StatementHandler> statements = ConcurrentHashMap.newKeySet();
+        private final Connection proxy;
+
+        private LogicalConnection(SQLiteConnection physical) {
+            this.physical = physical;
+            proxy =
+                    (Connection)
+                            Proxy.newProxyInstance(
+                                    SQLitePooledConnection.class.getClassLoader(),
+                                    new Class<?>[] {Connection.class},
+                                    this);
+        }
+
+        private Connection proxy() {
+            return proxy;
+        }
+
+        @Override
+        public Object invoke(Object ignoredProxy, Method method, Object[] arguments)
+                throws Throwable {
+            String name = method.getName();
+            if (method.getDeclaringClass() == Object.class) {
+                return invokeObjectMethod(ignoredProxy, method, arguments);
+            }
+            if (name.equals("close")) {
+                close(true);
+                return null;
+            }
+            if (name.equals("isClosed")) {
+                return closed.get() || physical.isClosed();
+            }
+            if (name.equals("isValid") && closed.get()) return false;
+            requireOpen();
+
+            if (name.equals("unwrap") && ((Class<?>) arguments[0]).isInstance(proxy)) {
+                return proxy;
+            }
+            if (name.equals("isWrapperFor") && ((Class<?>) arguments[0]).isInstance(proxy)) {
+                return true;
+            }
+
             try {
-                physicalConn.close();
-            } finally {
-                physicalConn = null;
+                Object result = method.invoke(physical, arguments);
+                if (result instanceof Statement statement) return wrapStatement(statement);
+                if (result instanceof DatabaseMetaData metadata) return wrapMetadata(metadata);
+                return result;
+            } catch (InvocationTargetException error) {
+                Throwable cause = error.getCause();
+                if (cause instanceof SQLException sqlException) reportPhysicalFailure(sqlException);
+                throw cause;
+            }
+        }
+
+        private void close(boolean notifyPool) throws SQLException {
+            SQLException failure;
+            synchronized (SQLitePooledConnection.this) {
+                if (!closed.compareAndSet(false, true)) return;
+
+                failure = closeStatements();
+                if (physicalConnection == physical && !physical.isClosed()) {
+                    try {
+                        if (!physical.getAutoCommit()) physical.rollback();
+                        physical.setAutoCommit(true);
+                        if (physical.getTransactionIsolation() != defaultTransactionIsolation) {
+                            physical.setTransactionIsolation(defaultTransactionIsolation);
+                        }
+                    } catch (SQLException error) {
+                        failure = append(failure, error);
+                    }
+                }
+                detach(this);
+            }
+
+            if (failure != null) {
+                errorReported.set(true);
+                fireConnectionError(failure);
+                throw failure;
+            }
+            if (notifyPool) fireConnectionClosed();
+        }
+
+        private void invalidate() throws SQLException {
+            synchronized (SQLitePooledConnection.this) {
+                if (!closed.compareAndSet(false, true)) return;
+                SQLException failure = closeStatements();
+                if (failure != null) throw failure;
+            }
+        }
+
+        private SQLException closeStatements() {
+            SQLException failure = null;
+            for (StatementHandler statement : Set.copyOf(statements)) {
+                try {
+                    statement.close(false);
+                } catch (SQLException error) {
+                    failure = append(failure, error);
+                }
+            }
+            return failure;
+        }
+
+        private void requireOpen() throws SQLException {
+            if (closed.get()) throw new SQLException("Connection is closed");
+        }
+
+        private Object wrapStatement(Statement statement) {
+            StatementHandler handler = new StatementHandler(statement);
+            statements.add(handler);
+            return handler.proxy();
+        }
+
+        private DatabaseMetaData wrapMetadata(DatabaseMetaData metadata) {
+            return (DatabaseMetaData)
+                    Proxy.newProxyInstance(
+                            SQLitePooledConnection.class.getClassLoader(),
+                            new Class<?>[] {DatabaseMetaData.class},
+                            (metadataProxy, method, arguments) -> {
+                                if (method.getDeclaringClass() == Object.class) {
+                                    return invokeObjectMethod(metadataProxy, method, arguments);
+                                }
+                                requireOpen();
+                                if (method.getName().equals("getConnection")) return proxy;
+                                try {
+                                    return method.invoke(metadata, arguments);
+                                } catch (InvocationTargetException error) {
+                                    Throwable cause = error.getCause();
+                                    if (cause instanceof SQLException sqlException) {
+                                        reportPhysicalFailure(sqlException);
+                                    }
+                                    throw cause;
+                                }
+                            });
+        }
+
+        private void reportPhysicalFailure(SQLException error) {
+            try {
+                if (physical.isClosed() && errorReported.compareAndSet(false, true)) {
+                    synchronized (SQLitePooledConnection.this) {
+                        detach(this);
+                    }
+                    fireConnectionError(error);
+                }
+            } catch (SQLException ignored) {
+                // Keep the original database failure.
+            }
+        }
+
+        private final class StatementHandler implements InvocationHandler {
+            private final Statement statement;
+            private final AtomicBoolean statementClosed = new AtomicBoolean();
+            private final Statement proxy;
+
+            private StatementHandler(Statement statement) {
+                this.statement = statement;
+                Class<?> statementType =
+                        statement instanceof PreparedStatement
+                                ? PreparedStatement.class
+                                : Statement.class;
+                proxy =
+                        (Statement)
+                                Proxy.newProxyInstance(
+                                        SQLitePooledConnection.class.getClassLoader(),
+                                        new Class<?>[] {statementType},
+                                        this);
+            }
+
+            private Statement proxy() {
+                return proxy;
+            }
+
+            @Override
+            public Object invoke(Object ignoredProxy, Method method, Object[] arguments)
+                    throws Throwable {
+                String name = method.getName();
+                if (method.getDeclaringClass() == Object.class) {
+                    return invokeObjectMethod(ignoredProxy, method, arguments);
+                }
+                if (name.equals("close")) {
+                    close(true);
+                    return null;
+                }
+                if (name.equals("isClosed")) return statementClosed.get() || statement.isClosed();
+                if (name.equals("getConnection")) {
+                    requireOpen();
+                    return LogicalConnection.this.proxy;
+                }
+                requireOpen();
+                if (statementClosed.get()) throw new SQLException("Statement is closed");
+
+                try {
+                    return method.invoke(statement, arguments);
+                } catch (InvocationTargetException error) {
+                    Throwable cause = error.getCause();
+                    if (cause instanceof SQLException sqlException) {
+                        notifyStatementError(sqlException);
+                        reportPhysicalFailure(sqlException);
+                    }
+                    throw cause;
+                }
+            }
+
+            private void close(boolean notifyPool) throws SQLException {
+                SQLException failure = null;
+                PreparedStatement closedPreparedStatement = null;
+                synchronized (SQLitePooledConnection.this) {
+                    if (!statementClosed.compareAndSet(false, true)) return;
+                    statements.remove(this);
+                    try {
+                        statement.close();
+                        if (notifyPool && proxy instanceof PreparedStatement prepared) {
+                            closedPreparedStatement = prepared;
+                        }
+                    } catch (SQLException error) {
+                        failure = error;
+                    }
+                }
+
+                if (failure != null) {
+                    notifyStatementError(failure);
+                    throw failure;
+                }
+                if (closedPreparedStatement != null) {
+                    StatementEvent event =
+                            new StatementEvent(
+                                    SQLitePooledConnection.this, closedPreparedStatement);
+                    for (StatementEventListener listener : statementListeners) {
+                        listener.statementClosed(event);
+                    }
+                }
+            }
+
+            private void notifyStatementError(SQLException error) {
+                if (!(proxy instanceof PreparedStatement prepared)) return;
+                StatementEvent event =
+                        new StatementEvent(SQLitePooledConnection.this, prepared, error);
+                for (StatementEventListener listener : statementListeners) {
+                    listener.statementErrorOccurred(event);
+                }
             }
         }
     }
 
-    /**
-     * @see javax.sql.PooledConnection#getConnection()
-     */
-    public Connection getConnection() throws SQLException {
-        if (handleConn != null) handleConn.close();
-
-        handleConn =
-                (Connection)
-                        Proxy.newProxyInstance(
-                                getClass().getClassLoader(),
-                                new Class[] {Connection.class},
-                                new InvocationHandler() {
-                                    volatile boolean isClosed;
-
-                                    public Object invoke(Object proxy, Method method, Object[] args)
-                                            throws Throwable {
-                                        try {
-                                            String name = method.getName();
-                                            if ("close".equals(name)) {
-                                                // a handle may be closed twice: once by the
-                                                // client and again by getConnection() when the
-                                                // pooled connection is reused. only reset the
-                                                // physical connection once.
-                                                if (isClosed) {
-                                                    return null;
-                                                }
-
-                                                // reset the physical connection and mark this
-                                                // handle closed before notifying listeners, so the
-                                                // pool cannot hand the connection to another thread
-                                                // while the rollback/setAutoCommit is still running
-                                                if (!physicalConn.getAutoCommit()) {
-                                                    physicalConn.rollback();
-                                                }
-                                                physicalConn.setAutoCommit(true);
-                                                isClosed = true;
-
-                                                ConnectionEvent event =
-                                                        new ConnectionEvent(
-                                                                SQLitePooledConnection.this);
-
-                                                for (int i = listeners.size() - 1; i >= 0; i--) {
-                                                    listeners.get(i).connectionClosed(event);
-                                                }
-
-                                                return null; // don't close physical connection
-                                            } else if ("isClosed".equals(name)) {
-                                                if (!isClosed)
-                                                    isClosed =
-                                                            ((Boolean)
-                                                                            method.invoke(
-                                                                                    physicalConn,
-                                                                                    args))
-                                                                    .booleanValue();
-
-                                                return isClosed;
-                                            }
-
-                                            if (isClosed) {
-                                                throw new SQLException("Connection is closed");
-                                            }
-
-                                            return method.invoke(physicalConn, args);
-                                        } catch (SQLException e) {
-                                            if ("database connection closed"
-                                                    .equals(e.getMessage())) {
-                                                ConnectionEvent event =
-                                                        new ConnectionEvent(
-                                                                SQLitePooledConnection.this, e);
-
-                                                for (int i = listeners.size() - 1; i >= 0; i--) {
-                                                    listeners.get(i).connectionErrorOccurred(event);
-                                                }
-                                            }
-
-                                            throw e;
-                                        } catch (InvocationTargetException ex) {
-                                            throw ex.getCause();
-                                        }
-                                    }
-                                });
-
-        return handleConn;
+    private static Object invokeObjectMethod(Object proxy, Method method, Object[] arguments) {
+        return switch (method.getName()) {
+            case "equals" -> proxy == arguments[0];
+            case "hashCode" -> System.identityHashCode(proxy);
+            case "toString" -> proxy.getClass().getInterfaces()[0].getSimpleName() + " handle";
+            default -> throw new UnsupportedOperationException(method.getName());
+        };
     }
 
-    /**
-     * @see javax.sql.PooledConnection#addConnectionEventListener(javax.sql.ConnectionEventListener)
-     */
-    public void addConnectionEventListener(ConnectionEventListener listener) {
-        listeners.add(listener);
-    }
-
-    /**
-     * @see
-     *     javax.sql.PooledConnection#removeConnectionEventListener(javax.sql.ConnectionEventListener)
-     */
-    public void removeConnectionEventListener(ConnectionEventListener listener) {
-        listeners.remove(listener);
-    }
-
-    public List<ConnectionEventListener> getListeners() {
-        return listeners;
-    }
-}
-
-class SQLitePooledConnectionHandle extends SQLiteConnection {
-    private final SQLitePooledConnection parent;
-    private final AtomicBoolean isClosed = new AtomicBoolean(false);
-
-    public SQLitePooledConnectionHandle(SQLitePooledConnection parent) {
-        super(parent.getPhysicalConn().getDatabase());
-        this.parent = parent;
-    }
-
-    @Override
-    public Statement createStatement() throws SQLException {
-        return new StatementImpl(this);
-    }
-
-    @Override
-    public PreparedStatement prepareStatement(String sql) throws SQLException {
-        return new PreparedStatementImpl(this, sql);
-    }
-
-    @Override
-    public CallableStatement prepareCall(String sql) throws SQLException {
-        return null;
-    }
-
-    @Override
-    public String nativeSQL(String sql) throws SQLException {
-        return null;
-    }
-
-    @Override
-    public void setAutoCommit(boolean autoCommit) throws SQLException {}
-
-    @Override
-    public boolean getAutoCommit() throws SQLException {
-        return false;
-    }
-
-    @Override
-    public void commit() throws SQLException {}
-
-    @Override
-    public void rollback() throws SQLException {}
-
-    @Override
-    public void close() throws SQLException {
-        ConnectionEvent event = new ConnectionEvent(parent);
-
-        List<ConnectionEventListener> listeners = parent.getListeners();
-        for (int i = listeners.size() - 1; i >= 0; i--) {
-            listeners.get(i).connectionClosed(event);
-        }
-
-        if (!parent.getPhysicalConn().getAutoCommit()) {
-            parent.getPhysicalConn().rollback();
-        }
-        parent.getPhysicalConn().setAutoCommit(true);
-        isClosed.set(true);
-    }
-
-    @Override
-    public boolean isClosed() {
-        return isClosed.get();
-    }
-
-    @Override
-    public DatabaseMetaData getMetaData() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public void setReadOnly(boolean readOnly) throws SQLException {}
-
-    @Override
-    public boolean isReadOnly() throws SQLException {
-        return false;
-    }
-
-    @Override
-    public void setCatalog(String catalog) throws SQLException {}
-
-    @Override
-    public String getCatalog() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public void setTransactionIsolation(int level) throws SQLException {}
-
-    @Override
-    public int getTransactionIsolation() {
-        return 0;
-    }
-
-    @Override
-    public SQLWarning getWarnings() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public void clearWarnings() throws SQLException {}
-
-    @Override
-    public Statement createStatement(int resultSetType, int resultSetConcurrency)
-            throws SQLException {
-        return null;
-    }
-
-    @Override
-    public PreparedStatement prepareStatement(
-            String sql, int resultSetType, int resultSetConcurrency) throws SQLException {
-        return null;
-    }
-
-    @Override
-    public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency)
-            throws SQLException {
-        return null;
-    }
-
-    @Override
-    public Map<String, Class<?>> getTypeMap() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public void setTypeMap(Map<String, Class<?>> map) throws SQLException {}
-
-    @Override
-    public void setHoldability(int holdability) throws SQLException {}
-
-    @Override
-    public int getHoldability() throws SQLException {
-        return 0;
-    }
-
-    @Override
-    public Savepoint setSavepoint() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public Savepoint setSavepoint(String name) throws SQLException {
-        return null;
-    }
-
-    @Override
-    public void rollback(Savepoint savepoint) throws SQLException {}
-
-    @Override
-    public void releaseSavepoint(Savepoint savepoint) throws SQLException {}
-
-    @Override
-    public Statement createStatement(
-            int resultSetType, int resultSetConcurrency, int resultSetHoldability)
-            throws SQLException {
-        return null;
-    }
-
-    @Override
-    public PreparedStatement prepareStatement(
-            String sql, int resultSetType, int resultSetConcurrency, int resultSetHoldability)
-            throws SQLException {
-        return null;
-    }
-
-    @Override
-    public CallableStatement prepareCall(
-            String sql, int resultSetType, int resultSetConcurrency, int resultSetHoldability)
-            throws SQLException {
-        return null;
-    }
-
-    @Override
-    public PreparedStatement prepareStatement(String sql, int autoGeneratedKeys)
-            throws SQLException {
-        return null;
-    }
-
-    @Override
-    public PreparedStatement prepareStatement(String sql, int[] columnIndexes) throws SQLException {
-        return null;
-    }
-
-    @Override
-    public PreparedStatement prepareStatement(String sql, String[] columnNames)
-            throws SQLException {
-        return null;
-    }
-
-    @Override
-    public Clob createClob() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public Blob createBlob() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public NClob createNClob() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public SQLXML createSQLXML() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public boolean isValid(int timeout) throws SQLException {
-        return false;
-    }
-
-    @Override
-    public void setClientInfo(String name, String value) throws SQLClientInfoException {}
-
-    @Override
-    public void setClientInfo(Properties properties) throws SQLClientInfoException {}
-
-    @Override
-    public String getClientInfo(String name) throws SQLException {
-        return null;
-    }
-
-    @Override
-    public Properties getClientInfo() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
-        return null;
-    }
-
-    @Override
-    public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
-        return null;
-    }
-
-    @Override
-    public void setSchema(String schema) throws SQLException {}
-
-    @Override
-    public String getSchema() throws SQLException {
-        return null;
-    }
-
-    @Override
-    public void abort(Executor executor) throws SQLException {}
-
-    @Override
-    public void setNetworkTimeout(Executor executor, int milliseconds) throws SQLException {}
-
-    @Override
-    public int getNetworkTimeout() throws SQLException {
-        return 0;
-    }
-
-    @Override
-    public <T> T unwrap(Class<T> iface) throws SQLException {
-        return null;
-    }
-
-    @Override
-    public boolean isWrapperFor(Class<?> iface) throws SQLException {
-        return false;
-    }
-
-    @Override
-    public int getBusyTimeout() {
-        return 0;
-    }
-
-    @Override
-    public void setBusyTimeout(int timeoutMillis) {}
-
-    @Override
-    public DB getDatabase() {
-        return null;
+    private static SQLException append(SQLException failure, SQLException next) {
+        if (failure == null) return next;
+        failure.addSuppressed(next);
+        return failure;
     }
 }
