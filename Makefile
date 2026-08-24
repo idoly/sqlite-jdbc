@@ -25,6 +25,7 @@ ifneq ($(SQLITE_SOURCE),$(TARGET)/$(SQLITE_AMAL_PREFIX))
 	created := $(shell touch $(SQLITE_UNPACKED))
 endif
 ENABLE_UPDATE_DELETE_LIMIT?=1
+SQLITE_EXTENSION_SOURCES := $(wildcard src/main/c/*.c)
 
 SQLITE_INCLUDE := $(shell dirname "$(SQLITE_HEADER)")
 
@@ -84,7 +85,7 @@ $(SQLITE_OUT)/sqlite3.o : $(SQLITE_UNPACKED)
 # limits defined here: https://www.sqlite.org/limits.html
 	perl -p -e "s/^(static const char \* const sqlite3azCompileOpt.+)$$/\1\n\n\/* This has been automatically added by sqlite-jdbc *\/\n  \"JDBC_EXTENSIONS\",/;" \
 	    $(SQLITE_OUT)/sqlite3.c.tmp > $(SQLITE_OUT)/sqlite3.c
-	cat src/main/ext/*.c >> $(SQLITE_OUT)/sqlite3.c
+	cat $(SQLITE_EXTENSION_SOURCES) >> $(SQLITE_OUT)/sqlite3.c
 	$(CC) -o $@ -c $(CCFLAGS) \
 	    -DSQLITE_ENABLE_LOAD_EXTENSION=1 \
 	    -DSQLITE_HAVE_ISNAN \

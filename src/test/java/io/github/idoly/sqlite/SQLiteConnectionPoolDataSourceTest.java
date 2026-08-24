@@ -16,7 +16,7 @@ package io.github.idoly.sqlite;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.idoly.sqlite.javax.SQLiteConnectionPoolDataSource;
+import io.github.idoly.sqlite.datasource.SQLiteConnectionPoolDataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;

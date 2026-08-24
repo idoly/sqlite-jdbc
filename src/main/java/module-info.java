@@ -4,7 +4,7 @@ module io.github.idoly.sqlitejdbc {
     requires static org.graalvm.nativeimage;
 
     exports io.github.idoly.sqlite;
-    exports io.github.idoly.sqlite.javax;
+    exports io.github.idoly.sqlite.datasource;
 
     provides java.sql.Driver with
             io.github.idoly.sqlite.JDBC;

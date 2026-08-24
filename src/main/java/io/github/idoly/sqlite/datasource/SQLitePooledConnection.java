@@ -11,7 +11,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *--------------------------------------------------------------------------*/
-package io.github.idoly.sqlite.javax;
+package io.github.idoly.sqlite.datasource;
 
 import io.github.idoly.sqlite.SQLiteConnection;
 import java.lang.reflect.InvocationHandler;
