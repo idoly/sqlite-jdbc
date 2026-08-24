@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.Optional;
@@ -1351,19 +1350,11 @@ final class FfmNative {
     private static Path extractPackagedLibrary() {
         String libraryName = LibraryLoaderUtil.getNativeLibName();
         String resource = LibraryLoaderUtil.getNativeLibResourcePath() + "/" + libraryName;
-        try (InputStream input = FfmNative.class.getResourceAsStream(resource)) {
-            if (input == null) {
-                throw new IllegalStateException(
-                        "No packaged SQLite library for "
-                                + System.getProperty("os.name", "unknown")
-                                + "/"
-                                + System.getProperty("os.arch", "unknown")
-                                + "; expected resource "
-                                + resource);
-            }
+        byte[] libraryBytes = readPackagedLibrary(resource);
+        try {
             Path directory = Files.createTempDirectory("sqlite-jdbc-ffm-");
             Path library = directory.resolve(libraryName);
-            Files.copy(input, library, StandardCopyOption.REPLACE_EXISTING);
+            Files.write(library, libraryBytes);
             library.toFile().deleteOnExit();
             directory.toFile().deleteOnExit();
             return library.toAbsolutePath();
@@ -1371,6 +1362,29 @@ final class FfmNative {
             throw new IllegalStateException(
                     "Could not extract packaged SQLite library " + resource, error);
         }
+    }
+
+    private static byte[] readPackagedLibrary(String resource) {
+        IOException failure = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try (InputStream input = FfmNative.class.getResourceAsStream(resource)) {
+                if (input == null) {
+                    throw new IllegalStateException(
+                            "No packaged SQLite library for "
+                                    + System.getProperty("os.name", "unknown")
+                                    + "/"
+                                    + System.getProperty("os.arch", "unknown")
+                                    + "; expected resource "
+                                    + resource);
+                }
+                return input.readAllBytes();
+            } catch (IOException error) {
+                if (failure != null) error.addSuppressed(failure);
+                failure = error;
+            }
+        }
+        throw new IllegalStateException(
+                "Could not read packaged SQLite library " + resource, failure);
     }
 
     private static MethodHandle downcall(String symbol, FunctionDescriptor descriptor) {

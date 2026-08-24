@@ -2,7 +2,8 @@ package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assumptions.assumeThat;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.github.idoly.sqlite.core.DB;
 import java.io.File;
@@ -13,10 +14,8 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledInNativeImage;
 import org.junit.jupiter.api.io.TempDir;
 
-@DisabledInNativeImage // assertj Assumptions do not work in native-image tests
 public class ErrorMessageTest {
     @TempDir File tempDir;
 
@@ -31,8 +30,8 @@ public class ErrorMessageTest {
             stmt.executeUpdate("insert into sample values(1, 'foo')");
 
             File to = File.createTempFile("error-message-test-moved-from", ".sqlite", tempDir);
-            assumeThat(to.delete()).isTrue();
-            assumeThat(from.renameTo(to)).isTrue();
+            assumeTrue(to.delete());
+            assumeTrue(from.renameTo(to));
 
             assertThatThrownBy(() -> stmt.executeUpdate("insert into sample values(2, 'bar')"))
                     .isInstanceOf(SQLException.class)
@@ -51,8 +50,8 @@ public class ErrorMessageTest {
             stmt.executeUpdate("insert into sample values(1, 'foo')");
         }
 
-        assumeThat(file.setReadOnly()).isTrue();
-        assumeThat(Files.isWritable(file.toPath())).isFalse();
+        assumeTrue(file.setReadOnly());
+        assumeFalse(Files.isWritable(file.toPath()));
 
         try (Connection conn =
                         DriverManager.getConnection("jdbc:sqlite:" + file.getAbsolutePath());
@@ -66,8 +65,8 @@ public class ErrorMessageTest {
     @Test
     public void cantOpenDir() throws IOException {
         File dir = File.createTempFile("error-message-test-cant-open-dir", "", tempDir);
-        assumeThat(dir.delete()).isTrue();
-        assumeThat(dir.mkdir()).isTrue();
+        assumeTrue(dir.delete());
+        assumeTrue(dir.mkdir());
 
         assertThatThrownBy(
                         () -> DriverManager.getConnection("jdbc:sqlite:" + dir.getAbsolutePath()))
@@ -87,8 +86,8 @@ public class ErrorMessageTest {
             stmt.executeUpdate("insert into sample values(1, 'foo')");
 
             File to = File.createTempFile("error-message-test-plain-2", ".sqlite", tempDir);
-            assumeThat(to.delete()).isTrue();
-            assumeThat(from.renameTo(to)).isTrue();
+            assumeTrue(to.delete());
+            assumeTrue(from.renameTo(to));
 
             assertThatThrownBy(() -> stmt.executeUpdate("insert into sample values(2, 'bar')"))
                     .isInstanceOfSatisfying(
