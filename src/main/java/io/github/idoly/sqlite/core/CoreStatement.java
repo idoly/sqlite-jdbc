@@ -67,7 +67,6 @@ public abstract class CoreStatement implements Codes {
 
     /**
      * @return True if the database is opened; false otherwise.
-     * @throws SQLException
      */
     boolean isOpen() throws SQLException {
         return !pointer.isClosed();

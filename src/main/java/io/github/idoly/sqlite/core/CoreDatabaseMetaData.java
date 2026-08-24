@@ -51,18 +51,12 @@ public abstract class CoreDatabaseMetaData implements DatabaseMetaData {
         this.conn = conn;
     }
 
-    /**
-     * @throws SQLException
-     */
     protected void checkOpen() throws SQLException {
         if (conn == null) {
             throw new SQLException("connection closed");
         }
     }
 
-    /**
-     * @throws SQLException
-     */
     public synchronized void close() throws SQLException {
         if (conn == null) {
             return;
@@ -143,45 +137,13 @@ public abstract class CoreDatabaseMetaData implements DatabaseMetaData {
         }
     }
 
-    /**
-     * Adds SQL string quotes to the given string.
-     *
-     * @param tableName The string to quote.
-     * @return The quoted string.
-     */
-    protected static String quote(String tableName) {
-        if (tableName == null) {
-            return "null";
-        } else {
-            return String.format("'%s'", tableName);
-        }
+    protected static String quote(String value) {
+        return value == null ? "null" : "'" + value + "'";
     }
 
-    /**
-     * Applies SQL escapes for special characters in a given string.
-     *
-     * @param val The string to escape.
-     * @return The SQL escaped string.
-     */
-    protected String escape(final String val) {
-        // TODO: this function is ugly, pass this work off to SQLite, then we
-        //       don't have to worry about Unicode 4, other characters needing
-        //       escaping, etc.
-        if (val == null) {
-            return null;
-        }
-        int len = val.length();
-        StringBuilder buf = new StringBuilder(len);
-        for (int i = 0; i < len; i++) {
-            if (val.charAt(i) == '\'') {
-                buf.append('\'');
-            }
-            buf.append(val.charAt(i));
-        }
-        return buf.toString();
+    protected String escape(String value) {
+        return value == null ? null : value.replace("'", "''");
     }
-
-    // inner classes
 
     /** Pattern used to extract column order for an unnamed primary key. */
     protected static final Pattern PK_UNNAMED_PATTERN =

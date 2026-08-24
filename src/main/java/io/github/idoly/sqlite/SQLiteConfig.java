@@ -12,15 +12,6 @@
  * limitations under the License.
  * --------------------------------------------------------------------------
  */
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// SQLiteConfig.java
-// Since: Dec 8, 2009
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite;
 
 import java.sql.Connection;
@@ -29,6 +20,7 @@ import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
@@ -103,7 +95,6 @@ public class SQLiteConfig {
      * Create a new JDBC connection using the current configuration
      *
      * @return The connection.
-     * @throws SQLException
      */
     public Connection createConnection(String url) throws SQLException {
         return JDBC.createConnection(url, toProperties());
@@ -113,7 +104,6 @@ public class SQLiteConfig {
      * Configures a connection.
      *
      * @param conn The connection to configure.
-     * @throws SQLException
      */
     public void apply(Connection conn) throws SQLException {
 
@@ -719,7 +709,7 @@ public class SQLiteConfig {
         }
 
         public static Encoding getEncoding(String value) {
-            return valueOf(value.replaceAll("-", "_").toUpperCase());
+            return valueOf(value.replaceAll("-", "_").toUpperCase(Locale.ROOT));
         }
     }
 
@@ -962,9 +952,9 @@ public class SQLiteConfig {
      *       <li>DEFAULT - the compile-time C preprocessor macro SQLITE_TEMP_STORE is used to
      *           determine where temporary tables and indices are stored
      *       <li>FILE - temporary tables and indices are stored in a file.
+     *       <li>MEMORY - temporary tables and indices are kept in memory.
      *     </ul>
-     *     <li>MEMORY - temporary tables and indices are kept in as if they were pure in-memory
-     *         databases memory
+     *
      * @see <a
      *     href="https://www.sqlite.org/pragma.html#pragma_temp_store">www.sqlite.org/pragma.html#pragma_temp_store</a>
      */
@@ -1024,7 +1014,7 @@ public class SQLiteConfig {
         }
 
         public static TransactionMode getMode(String mode) {
-            return TransactionMode.valueOf(mode.toUpperCase());
+            return TransactionMode.valueOf(mode.toUpperCase(Locale.ROOT));
         }
     }
 
@@ -1066,7 +1056,7 @@ public class SQLiteConfig {
         }
 
         public static DatePrecision getPrecision(String precision) {
-            return DatePrecision.valueOf(precision.toUpperCase());
+            return DatePrecision.valueOf(precision.toUpperCase(Locale.ROOT));
         }
     }
 
@@ -1087,7 +1077,7 @@ public class SQLiteConfig {
         }
 
         public static DateClass getDateClass(String dateClass) {
-            return DateClass.valueOf(dateClass.toUpperCase());
+            return DateClass.valueOf(dateClass.toUpperCase(Locale.ROOT));
         }
     }
 

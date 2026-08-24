@@ -1,6 +1,7 @@
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 
 import io.github.idoly.sqlite.core.DB;
@@ -37,6 +38,22 @@ public class ProgressHandlerTest {
         for (int i = 0; i < 100; i++) {
             stat.executeQuery("select * from foo");
         }
+    }
+
+    @Test
+    public void validatesConnectionAndInterval() {
+        ProgressHandler handler =
+                new ProgressHandler() {
+                    @Override
+                    protected int progress() {
+                        return 0;
+                    }
+                };
+
+        assertThatThrownBy(() -> ProgressHandler.clearHandler(null))
+                .isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> ProgressHandler.setHandler(conn, 0, handler))
+                .isInstanceOf(SQLException.class);
     }
 
     @Test

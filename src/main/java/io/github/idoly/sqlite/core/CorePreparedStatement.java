@@ -35,7 +35,6 @@ public abstract class CorePreparedStatement extends StatementImpl {
      *
      * @param conn Connection on which to create the prepared statement.
      * @param sql The SQL script to prepare.
-     * @throws SQLException
      */
     protected CorePreparedStatement(SQLiteConnection conn, String sql) throws SQLException {
         super(conn);
@@ -95,13 +94,7 @@ public abstract class CorePreparedStatement extends StatementImpl {
 
     // PARAMETER FUNCTIONS //////////////////////////////////////////
 
-    /**
-     * Assigns the object value to the element at the specific position of array batch.
-     *
-     * @param pos
-     * @param value
-     * @throws SQLException
-     */
+    /** Assigns the object value to the element at the specific position of array batch. */
     protected void batch(int pos, Object value) throws SQLException {
         checkOpen();
         if (batch == null) {

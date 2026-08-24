@@ -13,23 +13,14 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *--------------------------------------------------------------------------*/
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// OSInfo.java
-// Since: May 20, 2008
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite.util;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -37,9 +28,7 @@ import java.util.stream.Stream;
  *
  * @author leo
  */
-public class OSInfo {
-    private static final HashMap<String, String> archMapping = new HashMap<>();
-
+public final class OSInfo {
     public static final String X86 = "x86";
     public static final String X86_64 = "x86_64";
     public static final String IA64_32 = "ia64_32";
@@ -48,46 +37,37 @@ public class OSInfo {
     public static final String PPC64 = "ppc64";
     public static final String RISCV64 = "riscv64";
 
-    static {
-        // x86 mappings
-        archMapping.put(X86, X86);
-        archMapping.put("i386", X86);
-        archMapping.put("i486", X86);
-        archMapping.put("i586", X86);
-        archMapping.put("i686", X86);
-        archMapping.put("pentium", X86);
+    private OSInfo() {}
 
-        // x86_64 mappings
-        archMapping.put(X86_64, X86_64);
-        archMapping.put("amd64", X86_64);
-        archMapping.put("em64t", X86_64);
-        archMapping.put("universal", X86_64); // Needed for openjdk7 in Mac
-
-        // Itanium 64-bit mappings
-        archMapping.put(IA64, IA64);
-        archMapping.put("ia64w", IA64);
-
-        // Itanium 32-bit mappings, usually an HP-UX construct
-        archMapping.put(IA64_32, IA64_32);
-        archMapping.put("ia64n", IA64_32);
-
-        // PowerPC mappings
-        archMapping.put(PPC, PPC);
-        archMapping.put("power", PPC);
-        archMapping.put("powerpc", PPC);
-        archMapping.put("power_pc", PPC);
-        archMapping.put("power_rs", PPC);
-
-        archMapping.put(PPC64, PPC64);
-        archMapping.put("power64", PPC64);
-        archMapping.put("powerpc64", PPC64);
-        archMapping.put("power_pc64", PPC64);
-        archMapping.put("power_rs64", PPC64);
-        archMapping.put("ppc64el", PPC64);
-        archMapping.put("ppc64le", PPC64);
-
-        archMapping.put(RISCV64, RISCV64);
-    }
+    private static final Map<String, String> ARCHITECTURE_ALIASES =
+            Map.ofEntries(
+                    Map.entry(X86, X86),
+                    Map.entry("i386", X86),
+                    Map.entry("i486", X86),
+                    Map.entry("i586", X86),
+                    Map.entry("i686", X86),
+                    Map.entry("pentium", X86),
+                    Map.entry(X86_64, X86_64),
+                    Map.entry("amd64", X86_64),
+                    Map.entry("em64t", X86_64),
+                    Map.entry("universal", X86_64),
+                    Map.entry(IA64, IA64),
+                    Map.entry("ia64w", IA64),
+                    Map.entry(IA64_32, IA64_32),
+                    Map.entry("ia64n", IA64_32),
+                    Map.entry(PPC, PPC),
+                    Map.entry("power", PPC),
+                    Map.entry("powerpc", PPC),
+                    Map.entry("power_pc", PPC),
+                    Map.entry("power_rs", PPC),
+                    Map.entry(PPC64, PPC64),
+                    Map.entry("power64", PPC64),
+                    Map.entry("powerpc64", PPC64),
+                    Map.entry("power_pc64", PPC64),
+                    Map.entry("power_rs64", PPC64),
+                    Map.entry("ppc64el", PPC64),
+                    Map.entry("ppc64le", PPC64),
+                    Map.entry(RISCV64, RISCV64));
 
     public static void main(String[] args) {
         if (args.length >= 1) {
@@ -117,7 +97,7 @@ public class OSInfo {
             boolean found =
                     dirStream
                             .map(OSInfo::toRealPathOrEmpty)
-                            .anyMatch(s -> s.toLowerCase().contains("musl"));
+                            .anyMatch(path -> path.toLowerCase(Locale.ROOT).contains("musl"));
             if (found) {
                 return true;
             }
@@ -166,13 +146,13 @@ public class OSInfo {
             return override;
         }
 
-        String osArch = System.getProperty("os.arch");
+        String osArch = System.getProperty("os.arch", "unknown");
 
         if (osArch.startsWith("arm")) {
             osArch = resolveArmArchType();
         } else {
-            String lc = osArch.toLowerCase(Locale.US);
-            if (archMapping.containsKey(lc)) return archMapping.get(lc);
+            String alias = ARCHITECTURE_ALIASES.get(osArch.toLowerCase(Locale.ROOT));
+            if (alias != null) return alias;
         }
         return translateArchNameToFolderName(osArch);
     }

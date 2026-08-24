@@ -19,11 +19,11 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 
-/** */
 public abstract class SQLiteConnection implements Connection {
     private static final String RESOURCE_NAME_PREFIX = ":resource:";
     private final DB db;
@@ -33,11 +33,7 @@ public abstract class SQLiteConnection implements Connection {
     private TransactionMode currentTransactionMode;
     private boolean firstStatementExecuted = false;
 
-    /**
-     * Connection constructor for reusing an existing DB handle
-     *
-     * @param db
-     */
+    /** Connection constructor for reusing an existing DB handle */
     public SQLiteConnection(DB db) {
         this.db = db;
         connectionConfig = db.getConfig().newConnectionConfig();
@@ -48,7 +44,6 @@ public abstract class SQLiteConnection implements Connection {
      *
      * @param url The location of the database.
      * @param fileName The database.
-     * @throws SQLException
      */
     public SQLiteConnection(String url, String fileName) throws SQLException {
         this(url, fileName, new Properties());
@@ -60,7 +55,6 @@ public abstract class SQLiteConnection implements Connection {
      * @param url The location of the database file.
      * @param fileName The database.
      * @param prop The configurations to apply.
-     * @throws SQLException
      */
     public SQLiteConnection(String url, String fileName, Properties prop) throws SQLException {
         DB newDB = null;
@@ -179,7 +173,6 @@ public abstract class SQLiteConnection implements Connection {
      * @param rst the type setting.
      * @param rsc the concurrency setting.
      * @param rsh the holdability setting.
-     * @throws SQLException
      */
     protected void checkCursor(int rst, int rsc, int rsh) throws SQLException {
         if (rst != ResultSet.TYPE_FORWARD_ONLY)
@@ -201,17 +194,11 @@ public abstract class SQLiteConnection implements Connection {
         connectionConfig.setTransactionMode(mode);
     }
 
-    /**
-     * @see java.sql.Connection#getTransactionIsolation()
-     */
     @Override
     public int getTransactionIsolation() {
         return connectionConfig.getTransactionIsolation();
     }
 
-    /**
-     * @see java.sql.Connection#setTransactionIsolation(int)
-     */
     public void setTransactionIsolation(int level) throws SQLException {
         checkOpen();
 
@@ -300,7 +287,6 @@ public abstract class SQLiteConnection implements Connection {
      *
      * @param resourceAddr The resource address.
      * @return The extracted file name.
-     * @throws IOException
      */
     private static File extractResource(URL resourceAddr) throws IOException {
         if (resourceAddr.getProtocol().equals("file")) {
@@ -350,9 +336,6 @@ public abstract class SQLiteConnection implements Connection {
         return db;
     }
 
-    /**
-     * @see java.sql.Connection#getAutoCommit()
-     */
     @Override
     public boolean getAutoCommit() throws SQLException {
         checkOpen();
@@ -360,9 +343,6 @@ public abstract class SQLiteConnection implements Connection {
         return connectionConfig.isAutoCommit();
     }
 
-    /**
-     * @see java.sql.Connection#setAutoCommit(boolean)
-     */
     @Override
     public void setAutoCommit(boolean ac) throws SQLException {
         checkOpen();
@@ -395,23 +375,20 @@ public abstract class SQLiteConnection implements Connection {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/busy_timeout.html">https://www.sqlite.org/c3ref/busy_timeout.html</a>
      * @param timeoutMillis The timeout value in milliseconds.
-     * @throws SQLException
      */
     public void setBusyTimeout(int timeoutMillis) throws SQLException {
-        db.getConfig().setBusyTimeout(timeoutMillis);
         db.busy_timeout(timeoutMillis);
+        db.getConfig().setBusyTimeout(timeoutMillis);
     }
 
     public void setLimit(SQLiteLimits limit, int value) throws SQLException {
-        // Calling sqlite3_limit with a negative number is a no-op:
-        // https://www.sqlite.org/c3ref/limit.html
-        if (value >= 0) {
-            db.limit(limit.getId(), value);
-        }
+        if (limit == null) throw new SQLException("limit must not be null");
+        if (value >= 0) db.limit(limit.getId(), value);
     }
 
-    public void getLimit(SQLiteLimits limit) throws SQLException {
-        db.limit(limit.getId(), -1);
+    public int getLimit(SQLiteLimits limit) throws SQLException {
+        if (limit == null) throw new SQLException("limit must not be null");
+        return db.limit(limit.getId(), -1);
     }
 
     @Override
@@ -419,9 +396,6 @@ public abstract class SQLiteConnection implements Connection {
         return db.isClosed();
     }
 
-    /**
-     * @see java.sql.Connection#close()
-     */
     @Override
     public void close() throws SQLException {
         if (isClosed()) return;
@@ -430,18 +404,13 @@ public abstract class SQLiteConnection implements Connection {
         db.close();
     }
 
-    /**
-     * Whether an SQLite library interface to the database has been established.
-     *
-     * @throws SQLException
-     */
+    /** Whether an SQLite library interface to the database has been established. */
     protected void checkOpen() throws SQLException {
         if (isClosed()) throw new SQLException("database connection closed");
     }
 
     /**
      * @return Compile-time library version numbers.
-     * @throws SQLException
      * @see <a
      *     href="https://www.sqlite.org/c3ref/c_source_id.html">https://www.sqlite.org/c3ref/c_source_id.html</a>
      */
@@ -451,9 +420,6 @@ public abstract class SQLiteConnection implements Connection {
         return db.libversion();
     }
 
-    /**
-     * @see java.sql.Connection#commit()
-     */
     @Override
     public void commit() throws SQLException {
         checkOpen();
@@ -464,9 +430,6 @@ public abstract class SQLiteConnection implements Connection {
         this.setCurrentTransactionMode(this.getConnectionConfig().getTransactionMode());
     }
 
-    /**
-     * @see java.sql.Connection#rollback()
-     */
     @Override
     public void rollback() throws SQLException {
         checkOpen();
@@ -518,10 +481,7 @@ public abstract class SQLiteConnection implements Connection {
      * Extracts PRAGMA values from the filename and sets them into the Properties object which will
      * be used to build the SQLConfig. The sanitized filename is returned.
      *
-     * @param filename
-     * @param prop
      * @return a PRAGMA-sanitized filename
-     * @throws SQLException
      */
     protected static String extractPragmasFromFilename(String url, String filename, Properties prop)
             throws SQLException {
@@ -546,7 +506,7 @@ public abstract class SQLiteConnection implements Connection {
             }
 
             String[] kvp = parameter.split("=");
-            String key = kvp[0].trim().toLowerCase();
+            String key = kvp[0].trim().toLowerCase(Locale.ROOT);
             if (SQLiteConfig.pragmaSet.contains(key)) {
                 if (kvp.length == 1) {
                     throw new SQLException(

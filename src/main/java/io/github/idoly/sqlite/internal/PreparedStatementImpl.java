@@ -29,7 +29,6 @@ public class PreparedStatementImpl extends BasePreparedStatement
 
     // JDBC 4
     public void setRowId(int parameterIndex, RowId x) throws SQLException {
-        // TODO Support this
         throw new SQLFeatureNotSupportedException();
     }
 
@@ -73,7 +72,6 @@ public class PreparedStatementImpl extends BasePreparedStatement
     }
 
     public void setSQLXML(int parameterIndex, SQLXML xmlObject) throws SQLException {
-        // TODO Support this
         throw new SQLFeatureNotSupportedException();
     }
 
@@ -105,7 +103,6 @@ public class PreparedStatementImpl extends BasePreparedStatement
      * @param istream The input stream.
      * @param length The number of bytes to read.
      * @return byte array.
-     * @throws SQLException
      */
     private byte[] readBytes(InputStream istream) throws SQLException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();

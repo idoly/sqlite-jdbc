@@ -13,15 +13,6 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *--------------------------------------------------------------------------*/
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// SQLiteDataSource.java
-// Since: Mar 11, 2010
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite;
 
 import io.github.idoly.sqlite.SQLiteConfig.*;
@@ -216,7 +207,6 @@ public class SQLiteDataSource implements DataSource {
      * Set the incremental_vacuum value that causes up to N pages to be removed from the <a
      * href="https://www.sqlite.org/fileformat2.html#freelist">https://www.sqlite.org/fileformat2.html#freelist</a>.
      *
-     * @param numberOfPagesToBeRemoved
      * @see <a href="https://www.sqlite.org/pragma.html#pragma_incremental_vacuum">
      *     https://www.sqlite.org/pragma.html#pragma_incremental_vacuum</a>
      */
@@ -364,15 +354,12 @@ public class SQLiteDataSource implements DataSource {
      * Sets the value of the user-version. It is a big-endian 32-bit signed integer stored in the
      * database header at offset 60.
      *
-     * @param version
      * @see <a
      *     href="https://www.sqlite.org/pragma.html#pragma_schema_version">https://www.sqlite.org/pragma.html#pragma_schema_version</a>
      */
     public void setUserVersion(int version) {
         config.setUserVersion(version);
     }
-
-    // codes for the DataSource interface
 
     /**
      * @see javax.sql.DataSource#getConnection()
@@ -420,6 +407,7 @@ public class SQLiteDataSource implements DataSource {
      * @see javax.sql.DataSource#setLoginTimeout(int)
      */
     public void setLoginTimeout(int seconds) throws SQLException {
+        if (seconds < 0) throw new SQLException("login timeout must be >= 0");
         loginTimeout = seconds;
     }
 
@@ -428,7 +416,6 @@ public class SQLiteDataSource implements DataSource {
      *
      * @param iface The class to check.
      * @return True if it is an instance of the current class; false otherwise.
-     * @throws SQLException
      */
     public boolean isWrapperFor(Class<?> iface) throws SQLException {
         if (iface == null) throw new SQLException("interface must not be null");
@@ -440,7 +427,6 @@ public class SQLiteDataSource implements DataSource {
      *
      * @param iface The class to cast to.
      * @return The casted class.
-     * @throws SQLException
      */
     public <T> T unwrap(Class<T> iface) throws SQLException {
         if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());

@@ -2,9 +2,10 @@ package io.github.idoly.sqlite.util;
 
 import io.github.idoly.sqlite.SQLiteJDBCLoader;
 
-public class LibraryLoaderUtil {
-
+public final class LibraryLoaderUtil {
     public static final String NATIVE_LIB_BASE_NAME = "sqlitejdbc";
+
+    private LibraryLoaderUtil() {}
 
     /**
      * Get the OS-specific resource directory within the jar, where the relevant sqlitejdbc native

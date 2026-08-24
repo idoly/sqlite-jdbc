@@ -13,15 +13,6 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *--------------------------------------------------------------------------*/
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// SQLiteErrorCode.java
-// Since: Apr 21, 2009
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite;
 
 /**

@@ -1,12 +1,3 @@
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// ExtendedCommand.java
-// Since: Mar 12, 2010
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite;
 
 import io.github.idoly.sqlite.core.DB;
@@ -19,9 +10,11 @@ import java.util.regex.Pattern;
  *
  * @author leo
  */
-public class ExtendedCommand {
-    public static interface SQLExtension {
-        public void execute(DB db) throws SQLException;
+public final class ExtendedCommand {
+    private ExtendedCommand() {}
+
+    public interface SQLExtension {
+        void execute(DB database) throws SQLException;
     }
 
     /**
@@ -32,14 +25,11 @@ public class ExtendedCommand {
      *     sourceFileName
      * @return BackupCommand object if the argument is a backup command; RestoreCommand object if
      *     the argument is a restore command;
-     * @throws SQLException
      */
     public static SQLExtension parse(String sql) throws SQLException {
         if (sql == null) return null;
-        if (sql.length() > 5 && sql.substring(0, 6).toLowerCase().equals("backup"))
-            return BackupCommand.parse(sql);
-        else if (sql.length() > 6 && sql.substring(0, 7).toLowerCase().equals("restore"))
-            return RestoreCommand.parse(sql);
+        if (sql.regionMatches(true, 0, "backup", 0, 6)) return BackupCommand.parse(sql);
+        if (sql.regionMatches(true, 0, "restore", 0, 7)) return RestoreCommand.parse(sql);
 
         return null;
     }
@@ -58,7 +48,7 @@ public class ExtendedCommand {
         else return s;
     }
 
-    public static class BackupCommand implements SQLExtension {
+    public static final class BackupCommand implements SQLExtension {
         public final String srcDB;
         public final String destFile;
 
@@ -73,7 +63,7 @@ public class ExtendedCommand {
             this.destFile = destFile;
         }
 
-        private static Pattern backupCmd =
+        private static final Pattern BACKUP_COMMAND =
                 Pattern.compile(
                         "backup(\\s+(\"[^\"]*\"|'[^\']*\'|\\S+))?\\s+to\\s+(\"[^\"]*\"|'[^\']*\'|\\S+)",
                         Pattern.CASE_INSENSITIVE);
@@ -83,14 +73,13 @@ public class ExtendedCommand {
          *
          * @param sql SQLite database backup command.
          * @return BackupCommand object.
-         * @throws SQLException
          */
         public static BackupCommand parse(String sql) throws SQLException {
             if (sql != null) {
-                Matcher m = backupCmd.matcher(sql);
-                if (m.matches()) {
-                    String dbName = removeQuotation(m.group(2));
-                    String dest = removeQuotation(m.group(3));
+                Matcher matcher = BACKUP_COMMAND.matcher(sql);
+                if (matcher.matches()) {
+                    String dbName = removeQuotation(matcher.group(2));
+                    String dest = removeQuotation(matcher.group(3));
                     if (dbName == null || dbName.length() == 0) dbName = "main";
 
                     return new BackupCommand(dbName, dest);
@@ -108,10 +97,10 @@ public class ExtendedCommand {
         }
     }
 
-    public static class RestoreCommand implements SQLExtension {
+    public static final class RestoreCommand implements SQLExtension {
         public final String targetDB;
         public final String srcFile;
-        private static Pattern restoreCmd =
+        private static final Pattern RESTORE_COMMAND =
                 Pattern.compile(
                         "restore(\\s+(\"[^\"]*\"|'[^\']*\'|\\S+))?\\s+from\\s+(\"[^\"]*\"|'[^\']*\'|\\S+)",
                         Pattern.CASE_INSENSITIVE);
@@ -132,14 +121,13 @@ public class ExtendedCommand {
          *
          * @param sql SQLite restore backup command
          * @return RestoreCommand object.
-         * @throws SQLException
          */
         public static RestoreCommand parse(String sql) throws SQLException {
             if (sql != null) {
-                Matcher m = restoreCmd.matcher(sql);
-                if (m.matches()) {
-                    String dbName = removeQuotation(m.group(2));
-                    String dest = removeQuotation(m.group(3));
+                Matcher matcher = RESTORE_COMMAND.matcher(sql);
+                if (matcher.matches()) {
+                    String dbName = removeQuotation(matcher.group(2));
+                    String dest = removeQuotation(matcher.group(3));
                     if (dbName == null || dbName.length() == 0) dbName = "main";
                     return new RestoreCommand(dbName, dest);
                 }

@@ -23,9 +23,9 @@ import java.sql.SQLException;
 /**
  * Provides an interface for creating SQLite user-defined functions.
  *
- * <p>A subclass of <tt>io.github.idoly.sqlite.Function</tt> can be registered with
- * <tt>Function.create()</tt> and called by the name it was given. All functions must implement
- * <tt>xFunc()</tt>, which is called when SQLite runs the custom function. E.g.
+ * <p>A subclass of <code>io.github.idoly.sqlite.Function</code> can be registered with <code>
+ * Function.create()</code> and called by the name it was given. All functions must implement <code>
+ * xFunc()</code>, which is called when SQLite runs the custom function. E.g.
  *
  * <pre>
  *      Class.forName("io.github.idoly.sqlite.JDBC");
@@ -40,10 +40,10 @@ import java.sql.SQLException;
  *      conn.createStatement().execute("select myFunc();");
  *  </pre>
  *
- * <p>Arguments passed to a custom function can be accessed using the <tt>protected</tt> functions
- * provided. <tt>args()</tt> returns the number of arguments passed, while
- * <tt>value_&lt;type&gt;(int)</tt> returns the value of the specific argument. Similarly, a
- * function can return a value using the <tt>result(&lt;type&gt;)</tt> function.
+ * <p>Arguments passed to a custom function can be accessed using the <code>protected</code>
+ * functions provided. <code>args()</code> returns the number of arguments passed, while <code>
+ * value_&lt;type&gt;(int)</code> returns the value of the specific argument. Similarly, a function
+ * can return a value using the <code>result(&lt;type&gt;)</code> function.
  */
 public abstract class Function {
     /**
@@ -62,53 +62,49 @@ public abstract class Function {
     /**
      * Registers a given function with the connection.
      *
-     * @param conn The connection.
+     * @param connection The connection.
      * @param name The name of the function.
-     * @param f The function to register.
+     * @param function The function to register.
      */
-    public static void create(Connection conn, String name, Function f) throws SQLException {
-        create(conn, name, f, 0);
+    public static void create(Connection connection, String name, Function function)
+            throws SQLException {
+        create(connection, name, function, 0);
     }
 
     /**
      * Registers a given function with the connection.
      *
-     * @param conn The connection.
+     * @param connection The connection.
      * @param name The name of the function.
-     * @param f The function to register.
+     * @param function The function to register.
      * @param flags Extra flags to pass, such as {@link #FLAG_DETERMINISTIC}
      */
-    public static void create(Connection conn, String name, Function f, int flags)
+    public static void create(Connection connection, String name, Function function, int flags)
             throws SQLException {
-        create(conn, name, f, -1, flags);
+        create(connection, name, function, -1, flags);
     }
 
     /**
      * Registers a given function with the connection.
      *
-     * @param conn The connection.
+     * @param connection The connection.
      * @param name The name of the function.
-     * @param f The function to register.
-     * @param nArgs The number of arguments that the function takes.
+     * @param function The function to register.
+     * @param argumentCount The number of arguments that the function takes.
      * @param flags Extra flags to pass, such as {@link #FLAG_DETERMINISTIC}
      */
-    public static void create(Connection conn, String name, Function f, int nArgs, int flags)
+    public static void create(
+            Connection connection, String name, Function function, int argumentCount, int flags)
             throws SQLException {
-        if (!(conn instanceof SQLiteConnection)) {
-            throw new SQLException("connection must be to an SQLite db");
-        }
-        if (conn.isClosed()) {
-            throw new SQLException("connection closed");
-        }
+        SQLiteConnection sqliteConnection = requireSQLiteConnection(connection);
+        if (name == null || name.isEmpty())
+            throw new SQLException("function name must not be empty");
+        if (function == null) throw new SQLException("function must not be null");
+        validateArgumentCount(argumentCount);
 
-        f.conn = (SQLiteConnection) conn;
-        f.db = f.conn.getDatabase();
-
-        if (nArgs < -1 || nArgs > 127) {
-            throw new SQLException("invalid args provided: " + nArgs);
-        }
-
-        if (f.db.create_function(name, f, nArgs, flags) != Codes.SQLITE_OK) {
+        function.conn = sqliteConnection;
+        function.db = sqliteConnection.getDatabase();
+        if (function.db.create_function(name, function, argumentCount, flags) != Codes.SQLITE_OK) {
             throw new SQLException("error creating function");
         }
     }
@@ -116,35 +112,48 @@ public abstract class Function {
     /**
      * Removes a named function from the given connection.
      *
-     * @param conn The connection to remove the function from.
+     * @param connection The connection to remove the function from.
      * @param name The name of the function.
-     * @param nArgs Number of function arguments, or -1 for a variadic function.
-     * @throws SQLException
+     * @param argumentCount Number of function arguments, or -1 for a variadic function.
      */
-    public static void destroy(Connection conn, String name, int nArgs) throws SQLException {
-        if (!(conn instanceof SQLiteConnection)) {
-            throw new SQLException("connection must be to an SQLite db");
-        }
-        if (nArgs < -1 || nArgs > 127) {
-            throw new SQLException("invalid args provided: " + nArgs);
-        }
-        ((SQLiteConnection) conn).getDatabase().destroy_function(name, nArgs);
+    public static void destroy(Connection connection, String name, int argumentCount)
+            throws SQLException {
+        SQLiteConnection sqliteConnection = requireSQLiteConnection(connection);
+        if (name == null || name.isEmpty())
+            throw new SQLException("function name must not be empty");
+        validateArgumentCount(argumentCount);
+        sqliteConnection.getDatabase().destroy_function(name, argumentCount);
     }
 
     /**
      * Removes a named function from the given connection.
      *
-     * @param conn The connection to remove the function from.
+     * @param connection The connection to remove the function from.
      * @param name The name of the function.
-     * @throws SQLException
      */
-    public static void destroy(Connection conn, String name) throws SQLException {
-        destroy(conn, name, -1);
+    public static void destroy(Connection connection, String name) throws SQLException {
+        destroy(connection, name, -1);
+    }
+
+    private static SQLiteConnection requireSQLiteConnection(Connection connection)
+            throws SQLException {
+        if (!(connection instanceof SQLiteConnection sqliteConnection)) {
+            throw new SQLException("connection must be a SQLite connection");
+        }
+        if (connection.isClosed()) throw new SQLException("connection closed");
+        return sqliteConnection;
+    }
+
+    private static void validateArgumentCount(int argumentCount) throws SQLException {
+        if (argumentCount < -1 || argumentCount > 127) {
+            throw new SQLException("argument count must be between -1 and 127: " + argumentCount);
+        }
     }
 
     /**
-     * Called by SQLite as a custom function. Should access arguments through <tt>value_*(int)</tt>,
-     * return results with <tt>result(*)</tt> and throw errors with <tt>error(String)</tt>.
+     * Called by SQLite as a custom function. Should access arguments through <code>value_*(int)
+     * </code>, return results with <code>result(*)</code> and throw errors with <code>error(String)
+     * </code>.
      */
     protected abstract void xFunc() throws SQLException;
 
@@ -169,153 +178,98 @@ public abstract class Function {
     }
 
     /**
-     * Returns the number of arguments passed to the function. Can only be called from
-     * <tt>xFunc()</tt>.
+     * Returns the number of arguments passed to the function. Can only be called from <code>xFunc()
+     * </code>.
      */
     protected final synchronized int args() throws SQLException {
         checkContext();
         return args;
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to return a value.
-     *
-     * @param value
-     */
+    /** Called by <code>xFunc</code> to return a value. */
     protected final synchronized void result(byte[] value) throws SQLException {
         checkContext();
         db.result_blob(context, value);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to return a value.
-     *
-     * @param value
-     */
+    /** Called by <code>xFunc</code> to return a value. */
     protected final synchronized void result(double value) throws SQLException {
         checkContext();
         db.result_double(context, value);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to return a value.
-     *
-     * @param value
-     */
+    /** Called by <code>xFunc</code> to return a value. */
     protected final synchronized void result(int value) throws SQLException {
         checkContext();
         db.result_int(context, value);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to return a value.
-     *
-     * @param value
-     */
+    /** Called by <code>xFunc</code> to return a value. */
     protected final synchronized void result(long value) throws SQLException {
         checkContext();
         db.result_long(context, value);
     }
 
-    /** Called by <tt>xFunc</tt> to return a value. */
+    /** Called by <code>xFunc</code> to return a value. */
     protected final synchronized void result() throws SQLException {
         checkContext();
         db.result_null(context);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to return a value.
-     *
-     * @param value
-     */
+    /** Called by <code>xFunc</code> to return a value. */
     protected final synchronized void result(String value) throws SQLException {
         checkContext();
         db.result_text(context, value);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to throw an error.
-     *
-     * @param err
-     */
+    /** Called by <code>xFunc</code> to throw an error. */
     protected final synchronized void error(String err) throws SQLException {
         checkContext();
         db.result_error(context, err);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to access the value of an argument.
-     *
-     * @param arg
-     */
+    /** Called by <code>xFunc</code> to access the value of an argument. */
     protected final synchronized String value_text(int arg) throws SQLException {
         checkValue(arg);
         return db.value_text(this, arg);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to access the value of an argument.
-     *
-     * @param arg
-     */
+    /** Called by <code>xFunc</code> to access the value of an argument. */
     protected final synchronized byte[] value_blob(int arg) throws SQLException {
         checkValue(arg);
         return db.value_blob(this, arg);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to access the value of an argument.
-     *
-     * @param arg
-     */
+    /** Called by <code>xFunc</code> to access the value of an argument. */
     protected final synchronized double value_double(int arg) throws SQLException {
         checkValue(arg);
         return db.value_double(this, arg);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to access the value of an argument.
-     *
-     * @param arg
-     */
+    /** Called by <code>xFunc</code> to access the value of an argument. */
     protected final synchronized int value_int(int arg) throws SQLException {
         checkValue(arg);
         return db.value_int(this, arg);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to access the value of an argument.
-     *
-     * @param arg
-     */
+    /** Called by <code>xFunc</code> to access the value of an argument. */
     protected final synchronized long value_long(int arg) throws SQLException {
         checkValue(arg);
         return db.value_long(this, arg);
     }
 
-    /**
-     * Called by <tt>xFunc</tt> to access the value of an argument.
-     *
-     * @param arg
-     */
+    /** Called by <code>xFunc</code> to access the value of an argument. */
     protected final synchronized int value_type(int arg) throws SQLException {
         checkValue(arg);
         return db.value_type(this, arg);
     }
 
-    /**
-     * @throws SQLException
-     */
     private void checkContext() throws SQLException {
         if (conn == null || conn.getDatabase() == null || context == 0) {
             throw new SQLException("no context, not allowed to read value");
         }
     }
 
-    /**
-     * @param arg
-     * @throws SQLException
-     */
     private void checkValue(int arg) throws SQLException {
         if (conn == null || conn.getDatabase() == null || value == 0) {
             throw new SQLException("not in value access state");
@@ -339,7 +293,6 @@ public abstract class Function {
         /**
          * Defines the abstract aggregate callback function
          *
-         * @throws SQLException
          * @see <a
          *     href="https://www.sqlite.org/c3ref/aggregate_context.html">https://www.sqlite.org/c3ref/aggregate_context.html</a>
          */
@@ -348,7 +301,6 @@ public abstract class Function {
         /**
          * Defines the abstract aggregate callback function
          *
-         * @throws SQLException
          * @see <a
          *     href="https://www.sqlite.org/c3ref/aggregate_context.html">https://www.sqlite.org/c3ref/aggregate_context.html</a>
          */
@@ -396,7 +348,6 @@ public abstract class Function {
         /**
          * Defines the abstract window callback function
          *
-         * @throws SQLException
          * @see <a
          *     href="https://www.sqlite.org/windowfunctions.html#user_defined_aggregate_window_functions">https://www.sqlite.org/windowfunctions.html#user_defined_aggregate_window_functions</a>
          */
@@ -405,7 +356,6 @@ public abstract class Function {
         /**
          * Defines the abstract window callback function
          *
-         * @throws SQLException
          * @see <a
          *     href="https://www.sqlite.org/windowfunctions.html#user_defined_aggregate_window_functions">https://www.sqlite.org/windowfunctions.html#user_defined_aggregate_window_functions</a>
          */

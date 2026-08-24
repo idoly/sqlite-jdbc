@@ -49,6 +49,23 @@ public class DBMetaDataTest {
     }
 
     @Test
+    public void reportsJDBC43AndSQLiteCapabilities() throws SQLException {
+        assertThat(meta.getJDBCMajorVersion()).isEqualTo(4);
+        assertThat(meta.getJDBCMinorVersion()).isEqualTo(3);
+        assertThat(meta.nullsAreSortedLow()).isTrue();
+        assertThat(meta.nullsAreSortedHigh()).isFalse();
+        assertThat(meta.storesMixedCaseQuotedIdentifiers()).isTrue();
+        assertThat(meta.supportsCorrelatedSubqueries()).isTrue();
+        assertThat(meta.supportsDifferentTableCorrelationNames()).isTrue();
+        assertThat(meta.supportsGroupByBeyondSelect()).isTrue();
+        assertThat(meta.supportsGroupByUnrelated()).isTrue();
+        assertThat(meta.supportsLikeEscapeClause()).isTrue();
+        assertThat(meta.supportsMixedCaseQuotedIdentifiers()).isTrue();
+        assertThat(meta.supportsOrderByUnrelated()).isTrue();
+        assertThat(meta.supportsTableCorrelationNames()).isTrue();
+    }
+
+    @Test
     public void getTables() throws SQLException {
         ResultSet rs = meta.getTables(null, null, null, null);
         assertThat(rs).isNotNull();

@@ -36,6 +36,7 @@ public class SQLiteDataSourceTest {
         assertThat(dataSource.unwrap(SQLiteDataSource.class)).isSameAs(dataSource);
         assertThatThrownBy(() -> dataSource.unwrap(String.class)).isInstanceOf(SQLException.class);
         assertThatThrownBy(() -> dataSource.isWrapperFor(null)).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> dataSource.setLoginTimeout(-1)).isInstanceOf(SQLException.class);
     }
 
     @Test

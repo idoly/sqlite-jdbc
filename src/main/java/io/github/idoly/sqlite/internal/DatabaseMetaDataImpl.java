@@ -23,7 +23,7 @@ public class DatabaseMetaDataImpl extends BaseDatabaseMetaData {
     }
 
     public RowIdLifetime getRowIdLifetime() throws SQLException {
-        throw new SQLFeatureNotSupportedException();
+        return RowIdLifetime.ROWID_UNSUPPORTED;
     }
 
     public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
@@ -31,11 +31,11 @@ public class DatabaseMetaDataImpl extends BaseDatabaseMetaData {
     }
 
     public boolean supportsStoredFunctionsUsingCallSyntax() throws SQLException {
-        throw new SQLFeatureNotSupportedException();
+        return false;
     }
 
     public boolean autoCommitFailureClosesAllResultSets() throws SQLException {
-        throw new SQLFeatureNotSupportedException();
+        return false;
     }
 
     public ResultSet getClientInfoProperties() throws SQLException {
@@ -54,6 +54,6 @@ public class DatabaseMetaDataImpl extends BaseDatabaseMetaData {
     }
 
     public boolean generatedKeyAlwaysReturned() throws SQLException {
-        throw new SQLFeatureNotSupportedException();
+        return false;
     }
 }

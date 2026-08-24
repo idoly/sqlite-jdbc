@@ -20,8 +20,10 @@ import io.github.idoly.sqlite.internal.ConnectionImpl;
 import java.sql.*;
 import java.util.Properties;
 
-public class JDBC implements Driver {
+public final class JDBC implements Driver {
     public static final String PREFIX = "jdbc:sqlite:";
+
+    public JDBC() {}
 
     static {
         try {
@@ -31,23 +33,14 @@ public class JDBC implements Driver {
         }
     }
 
-    /**
-     * @see java.sql.Driver#getMajorVersion()
-     */
     public int getMajorVersion() {
         return SQLiteJDBCLoader.getMajorVersion();
     }
 
-    /**
-     * @see java.sql.Driver#getMinorVersion()
-     */
     public int getMinorVersion() {
         return SQLiteJDBCLoader.getMinorVersion();
     }
 
-    /**
-     * @see java.sql.Driver#jdbcCompliant()
-     */
     public boolean jdbcCompliant() {
         return false;
     }
@@ -56,9 +49,6 @@ public class JDBC implements Driver {
         throw new SQLFeatureNotSupportedException("getParentLogger");
     }
 
-    /**
-     * @see java.sql.Driver#acceptsURL(java.lang.String)
-     */
     public boolean acceptsURL(String url) {
         return isValidURL(url);
     }
@@ -66,23 +56,16 @@ public class JDBC implements Driver {
     /**
      * Validates a URL
      *
-     * @param url
      * @return true if the URL is valid, false otherwise
      */
     public static boolean isValidURL(String url) {
-        return url != null && url.toLowerCase().startsWith(PREFIX);
+        return url != null && url.regionMatches(true, 0, PREFIX, 0, PREFIX.length());
     }
 
-    /**
-     * @see java.sql.Driver#getPropertyInfo(java.lang.String, java.util.Properties)
-     */
     public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws SQLException {
         return SQLiteConfig.getDriverPropertyInfo();
     }
 
-    /**
-     * @see java.sql.Driver#connect(java.lang.String, java.util.Properties)
-     */
     public Connection connect(String url, Properties info) throws SQLException {
         if (!isValidURL(url)) {
             return null;

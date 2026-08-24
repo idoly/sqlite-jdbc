@@ -6,14 +6,12 @@ import java.sql.Connection;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.EnumMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Properties;
 import java.util.TimeZone;
 
 /** Connection local configurations */
-public class SQLiteConnectionConfig implements Cloneable {
+public class SQLiteConnectionConfig {
     private SQLiteConfig.DateClass dateClass = SQLiteConfig.DateClass.INTEGER;
     private SQLiteConfig.DatePrecision datePrecision =
             SQLiteConfig.DatePrecision.MILLISECONDS; // Calendar.SECOND or Calendar.MILLISECOND
@@ -153,7 +151,6 @@ public class SQLiteConnectionConfig implements Cloneable {
         return transactionMode;
     }
 
-    @SuppressWarnings("deprecation")
     public void setTransactionMode(SQLiteConfig.TransactionMode transactionMode) {
         this.transactionMode = transactionMode;
     }
@@ -166,16 +163,11 @@ public class SQLiteConnectionConfig implements Cloneable {
         this.getGeneratedKeys = getGeneratedKeys;
     }
 
-    private static final Map<SQLiteConfig.TransactionMode, String> beginCommandMap =
-            new EnumMap<>(SQLiteConfig.TransactionMode.class);
-
-    static {
-        beginCommandMap.put(SQLiteConfig.TransactionMode.DEFERRED, "begin;");
-        beginCommandMap.put(SQLiteConfig.TransactionMode.IMMEDIATE, "begin immediate;");
-        beginCommandMap.put(SQLiteConfig.TransactionMode.EXCLUSIVE, "begin exclusive;");
-    }
-
     String transactionPrefix() {
-        return beginCommandMap.get(transactionMode);
+        return switch (transactionMode) {
+            case DEFERRED -> "begin;";
+            case IMMEDIATE -> "begin immediate;";
+            case EXCLUSIVE -> "begin exclusive;";
+        };
     }
 }

@@ -9,58 +9,47 @@ public abstract class BusyHandler {
     /**
      * commit the busy handler for the connection.
      *
-     * @param conn the SQLite connection
-     * @param busyHandler the busyHandler
-     * @throws SQLException
+     * @param connection the SQLite connection
+     * @param handler the busyHandler
      */
-    private static void commitHandler(Connection conn, BusyHandler busyHandler)
+    private static void installHandler(Connection connection, BusyHandler handler)
             throws SQLException {
-
-        if (!(conn instanceof SQLiteConnection)) {
-            throw new SQLException("connection must be to an SQLite db");
+        if (!(connection instanceof SQLiteConnection sqliteConnection)) {
+            throw new SQLException("connection must be a SQLite connection");
         }
-
-        if (conn.isClosed()) {
-            throw new SQLException("connection closed");
-        }
-
-        SQLiteConnection sqliteConnection = (SQLiteConnection) conn;
-        sqliteConnection.getDatabase().busy_handler(busyHandler);
+        if (connection.isClosed()) throw new SQLException("connection closed");
+        sqliteConnection.getDatabase().busy_handler(handler);
     }
 
     /**
      * Sets a busy handler for the connection.
      *
-     * @param conn the SQLite connection
-     * @param busyHandler the busyHandler
-     * @throws SQLException
+     * @param connection the SQLite connection
+     * @param handler the busyHandler
      */
-    public static final void setHandler(Connection conn, BusyHandler busyHandler)
-            throws SQLException {
-        commitHandler(conn, busyHandler);
+    public static void setHandler(Connection connection, BusyHandler handler) throws SQLException {
+        installHandler(connection, handler);
     }
 
     /**
      * Clears any busy handler registered with the connection.
      *
-     * @param conn the SQLite connection
-     * @throws SQLException
+     * @param connection the SQLite connection
      */
-    public static final void clearHandler(Connection conn) throws SQLException {
-        commitHandler(conn, null);
+    public static void clearHandler(Connection connection) throws SQLException {
+        installHandler(connection, null);
     }
 
     /**
      * https://www.sqlite.org/c3ref/busy_handler.html
      *
-     * @param nbPrevInvok number of times that the busy handler has been invoked previously for the
-     *     same locking event
-     * @throws SQLException
+     * @param previousInvocations number of times that the busy handler has been invoked previously
+     *     for the same locking event
      * @return If the busy callback returns 0, then no additional attempts are made to access the
      *     database and SQLITE_BUSY is returned to the application. If the callback returns
      *     non-zero, then another attempt is made to access the database and the cycle repeats.
      */
-    protected abstract int callback(int nbPrevInvok) throws SQLException;
+    protected abstract int callback(int previousInvocations) throws SQLException;
 
     /** Internal FFM dispatch entry point. */
     public final int invokeCallback(int previousInvocations) throws SQLException {

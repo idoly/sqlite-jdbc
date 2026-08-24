@@ -96,9 +96,7 @@ public abstract class CoreResultSet implements Codes {
     /**
      * Takes col in [1,x] form, returns in [0,x-1] form
      *
-     * @param col
      * @return
-     * @throws SQLException
      */
     public int checkCol(int col) throws SQLException {
         if (colsMeta == null) {
@@ -113,9 +111,7 @@ public abstract class CoreResultSet implements Codes {
     /**
      * Takes col in [1,x] form, marks it as last accessed and returns [0,x-1]
      *
-     * @param col
      * @return
-     * @throws SQLException
      */
     protected int markCol(int col) throws SQLException {
         checkCol(col);
@@ -123,9 +119,6 @@ public abstract class CoreResultSet implements Codes {
         return --col;
     }
 
-    /**
-     * @throws SQLException
-     */
     public void checkMeta() throws SQLException {
         checkCol(1);
         if (meta == null) {

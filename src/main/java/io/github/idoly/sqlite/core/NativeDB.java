@@ -160,8 +160,8 @@ public final class NativeDB extends DB {
     }
 
     @Override
-    public synchronized int clear_bindings(long stmt) throws SQLException {
-        return FfmNative.clearBindings(stmt);
+    public synchronized int clearBindings(long statement) throws SQLException {
+        return FfmNative.clearBindings(statement);
     }
 
     @Override

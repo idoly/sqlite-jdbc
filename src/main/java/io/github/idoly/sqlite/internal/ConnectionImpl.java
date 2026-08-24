@@ -34,9 +34,6 @@ public class ConnectionImpl extends BaseConnection {
     }
 
     // JDBC 4
-    /**
-     * @see java.sql.Connection#isClosed()
-     */
     public boolean isClosed() throws SQLException {
         return super.isClosed();
     }

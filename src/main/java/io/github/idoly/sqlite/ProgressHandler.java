@@ -8,37 +8,41 @@ public abstract class ProgressHandler {
     /**
      * Sets a progress handler for the connection.
      *
-     * @param conn the SQLite connection
-     * @param vmCalls the approximate number of virtual machine instructions that are evaluated
-     *     between successive invocations of the progressHandler
-     * @param progressHandler the progressHandler
-     * @throws SQLException
+     * @param connection the SQLite connection
+     * @param virtualMachineCalls the approximate number of virtual machine instructions that are
+     *     evaluated between successive invocations of the progressHandler
+     * @param handler the progressHandler
      */
-    public static final void setHandler(
-            Connection conn, int vmCalls, ProgressHandler progressHandler) throws SQLException {
-        if (!(conn instanceof SQLiteConnection)) {
-            throw new SQLException("connection must be to an SQLite db");
-        }
-        if (conn.isClosed()) {
-            throw new SQLException("connection closed");
-        }
-        SQLiteConnection sqliteConnection = (SQLiteConnection) conn;
-        if (progressHandler == null) {
+    public static void setHandler(
+            Connection connection, int virtualMachineCalls, ProgressHandler handler)
+            throws SQLException {
+        SQLiteConnection sqliteConnection = requireSQLiteConnection(connection);
+        if (handler == null) {
             sqliteConnection.getDatabase().clear_progress_handler();
         } else {
-            sqliteConnection.getDatabase().register_progress_handler(vmCalls, progressHandler);
+            if (virtualMachineCalls < 1) {
+                throw new SQLException("virtualMachineCalls must be >= 1");
+            }
+            sqliteConnection.getDatabase().register_progress_handler(virtualMachineCalls, handler);
         }
     }
 
     /**
      * Clears any progress handler registered with the connection.
      *
-     * @param conn the SQLite connection
-     * @throws SQLException
+     * @param connection the SQLite connection
      */
-    public static final void clearHandler(Connection conn) throws SQLException {
-        SQLiteConnection sqliteConnection = (SQLiteConnection) conn;
-        sqliteConnection.getDatabase().clear_progress_handler();
+    public static void clearHandler(Connection connection) throws SQLException {
+        requireSQLiteConnection(connection).getDatabase().clear_progress_handler();
+    }
+
+    private static SQLiteConnection requireSQLiteConnection(Connection connection)
+            throws SQLException {
+        if (!(connection instanceof SQLiteConnection sqliteConnection)) {
+            throw new SQLException("connection must be a SQLite connection");
+        }
+        if (connection.isClosed()) throw new SQLException("connection closed");
+        return sqliteConnection;
     }
 
     protected abstract int progress() throws SQLException;

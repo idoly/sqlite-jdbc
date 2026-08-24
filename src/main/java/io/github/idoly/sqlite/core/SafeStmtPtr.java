@@ -6,7 +6,7 @@ import java.sql.SQLException;
  * A class for safely wrapping calls to a native pointer to a statement, ensuring no other thread
  * has access to the pointer while it is run
  */
-public class SafeStmtPtr {
+public final class SafeStmtPtr {
     // store a reference to the DB, to lock it before any safe function is called. This avoids
     // deadlocking by locking the DB. All calls with the raw pointer are synchronized with the DB
     // anyways, so making a separate lock would be pointless
@@ -154,12 +154,12 @@ public class SafeStmtPtr {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         SafeStmtPtr that = (SafeStmtPtr) o;
-        return ptr == that.ptr;
+        return db == that.db && ptr == that.ptr;
     }
 
     @Override
     public int hashCode() {
-        return Long.hashCode(ptr);
+        return 31 * System.identityHashCode(db) + Long.hashCode(ptr);
     }
 
     @FunctionalInterface

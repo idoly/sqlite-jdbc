@@ -16,16 +16,15 @@
 package io.github.idoly.sqlite;
 
 import io.github.idoly.sqlite.core.Codes;
-import io.github.idoly.sqlite.core.DB;
 import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
  * Provides an interface for creating SQLite user-defined collations.
  *
- * <p>A subclass of <tt>io.github.idoly.sqlite.Collation</tt> can be registered with
- * <tt>Collation.create()</tt> and called by the name it was given. All collations must implement
- * <tt>xCompare(String, String)</tt>, which is called when SQLite compares two strings using the
+ * <p>A subclass of <code>io.github.idoly.sqlite.Collation</code> can be registered with <code>
+ * Collation.create()</code> and called by the name it was given. All collations must implement
+ * <code>xCompare(String, String)</code>, which is called when SQLite compares two strings using the
  * custom collation. Eg.
  *
  * <pre>
@@ -42,28 +41,23 @@ import java.sql.SQLException;
  *  </pre>
  */
 public abstract class Collation {
-    private SQLiteConnection conn;
-    private DB db;
 
     /**
      * Registers a given collation with the connection.
      *
-     * @param conn The connection.
+     * @param connection The connection.
      * @param name The name of the collation.
-     * @param f The collation to register.
+     * @param collation The collation to register.
      */
-    public static final void create(Connection conn, String name, Collation f) throws SQLException {
-        if (conn == null || !(conn instanceof SQLiteConnection)) {
-            throw new SQLException("connection must be to an SQLite db");
+    public static void create(Connection connection, String name, Collation collation)
+            throws SQLException {
+        SQLiteConnection sqliteConnection = requireSQLiteConnection(connection);
+        if (name == null || name.isEmpty()) {
+            throw new SQLException("collation name must not be empty");
         }
-        if (conn.isClosed()) {
-            throw new SQLException("connection closed");
-        }
+        if (collation == null) throw new SQLException("collation must not be null");
 
-        f.conn = (SQLiteConnection) conn;
-        f.db = f.conn.getDatabase();
-
-        if (f.db.create_collation(name, f) != Codes.SQLITE_OK) {
+        if (sqliteConnection.getDatabase().create_collation(name, collation) != Codes.SQLITE_OK) {
             throw new SQLException("error creating collation");
         }
     }
@@ -71,15 +65,24 @@ public abstract class Collation {
     /**
      * Removes a named collation from the given connection.
      *
-     * @param conn The connection to remove the collation from.
+     * @param connection The connection to remove the collation from.
      * @param name The name of the collation.
-     * @throws SQLException
      */
-    public static final void destroy(Connection conn, String name) throws SQLException {
-        if (conn == null || !(conn instanceof SQLiteConnection)) {
-            throw new SQLException("connection must be to an SQLite db");
+    public static void destroy(Connection connection, String name) throws SQLException {
+        SQLiteConnection sqliteConnection = requireSQLiteConnection(connection);
+        if (name == null || name.isEmpty()) {
+            throw new SQLException("collation name must not be empty");
         }
-        ((SQLiteConnection) conn).getDatabase().destroy_collation(name);
+        sqliteConnection.getDatabase().destroy_collation(name);
+    }
+
+    private static SQLiteConnection requireSQLiteConnection(Connection connection)
+            throws SQLException {
+        if (!(connection instanceof SQLiteConnection sqliteConnection)) {
+            throw new SQLException("connection must be a SQLite connection");
+        }
+        if (connection.isClosed()) throw new SQLException("connection closed");
+        return sqliteConnection;
     }
 
     /**
