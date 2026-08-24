@@ -1,128 +1,81 @@
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// OSInfoTest.java
-// Since: May 20, 2008
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite.util;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.logging.Logger;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.DisabledInNativeImage;
 import org.junitpioneer.jupiter.SetSystemProperty;
 
-@DisabledIfEnvironmentVariable(
-        named = "SKIP_TEST_MULTIARCH",
-        matches = "true",
-        disabledReason = "Those tests would fail when ran on a musl based Linux")
 @DisabledInNativeImage
-public class OSInfoTest {
-    private static final Logger logger = Logger.getLogger(OSInfoTest.class.getName());
-
+class OSInfoTest {
     @Test
-    public void osName() {
-        assertThat(OSInfo.translateOSNameToFolderName("Windows XP")).isEqualTo("Windows");
-        assertThat(OSInfo.translateOSNameToFolderName("Windows 2000")).isEqualTo("Windows");
-        assertThat(OSInfo.translateOSNameToFolderName("Windows Vista")).isEqualTo("Windows");
-        assertThat(OSInfo.translateOSNameToFolderName("Windows 98")).isEqualTo("Windows");
-        assertThat(OSInfo.translateOSNameToFolderName("Windows 95")).isEqualTo("Windows");
-
-        assertThat(OSInfo.translateOSNameToFolderName("Mac OS")).isEqualTo("Mac");
-        assertThat(OSInfo.translateOSNameToFolderName("Mac OS X")).isEqualTo("Mac");
-
-        assertThat(OSInfo.translateOSNameToFolderName("AIX")).isEqualTo("AIX");
-
-        assertThat(OSInfo.translateOSNameToFolderName("Linux")).isEqualTo("Linux");
-        assertThat(OSInfo.translateOSNameToFolderName("OS2")).isEqualTo("OS2");
-
-        assertThat(OSInfo.translateOSNameToFolderName("HP UX")).isEqualTo("HPUX");
+    void normalizesSupportedArchitectures() {
+        assertArchitecture("amd64", "x86_64");
+        assertArchitecture("x86_64", "x86_64");
+        assertArchitecture("arm64", "aarch64");
+        assertArchitecture("aarch64", "aarch64");
     }
 
     @Test
-    public void archName() {
-        assertThat(OSInfo.translateArchNameToFolderName("i386")).isEqualTo("i386");
-        assertThat(OSInfo.translateArchNameToFolderName("x86")).isEqualTo("x86");
-        assertThat(OSInfo.translateArchNameToFolderName("ppc")).isEqualTo("ppc");
-        assertThat(OSInfo.translateArchNameToFolderName("amd64")).isEqualTo("amd64");
+    @SetSystemProperty(key = "os.arch", value = "riscv64")
+    void rejectsUnsupportedArchitecture() {
+        assertThatThrownBy(OSInfo::getArchName)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("riscv64");
     }
 
     @Test
-    public void folderPath() {
-        String[] component = OSInfo.getNativeLibFolderPathForCurrentOS().split("/");
-        assertThat(component.length).isEqualTo(2);
-        assertThat(component[0]).isEqualTo(OSInfo.getOSName());
-        assertThat(component[1]).isEqualTo(OSInfo.getArchName());
+    @SetSystemProperty(key = "os.name", value = "AIX")
+    void rejectsUnsupportedOperatingSystem() {
+        assertThatThrownBy(OSInfo::getOSName)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AIX");
     }
 
     @Test
-    public void testMainForOSName() {
+    void packagedLibraryExistsForCurrentPlatform() {
+        String path = LibraryLoaderUtil.getNativeLibResourcePath();
+        String name = LibraryLoaderUtil.getNativeLibName();
+        assertThat(OSInfo.getNativeLibFolderPathForCurrentOS())
+                .isEqualTo(OSInfo.getOSName() + "/" + OSInfo.getArchName());
+        assertThat(LibraryLoaderUtil.hasNativeLib(path, name)).isTrue();
+    }
 
-        // preserve the current System.out
-        PrintStream out = System.out;
+    @Test
+    void commandLineOutput() {
+        assertThat(captureOutput("--os")).isEqualTo(OSInfo.getOSName());
+        assertThat(captureOutput("--arch")).isEqualTo(OSInfo.getArchName());
+        assertThat(captureOutput()).isEqualTo(OSInfo.getNativeLibFolderPathForCurrentOS());
+    }
+
+    @Test
+    @SetSystemProperty(key = "io.github.idoly.sqlite.osinfo.architecture", value = "custom")
+    void architectureOverrideSupportsCrossCompilation() {
+        assertThat(OSInfo.getArchName()).isEqualTo("custom");
+    }
+
+    private static void assertArchitecture(String input, String expected) {
+        String previous = System.setProperty("os.arch", input);
         try {
-            // switch STDOUT
-            ByteArrayOutputStream buf = new ByteArrayOutputStream();
-            PrintStream tmpOut = new PrintStream(buf);
-            System.setOut(tmpOut);
-            OSInfo.main(new String[] {"--os"});
-            assertThat(buf.toString()).isEqualTo(OSInfo.getOSName());
+            assertThat(OSInfo.getArchName()).isEqualTo(expected);
         } finally {
-            // reset STDOUT
-            System.setOut(out);
+            if (previous == null) System.clearProperty("os.arch");
+            else System.setProperty("os.arch", previous);
         }
     }
 
-    @Test
-    public void testMainForArchName() {
-
-        // preserver the current System.out
-        PrintStream out = System.out;
-        try {
-            // switch STDOUT
-            ByteArrayOutputStream buf = new ByteArrayOutputStream();
-            PrintStream tmpOut = new PrintStream(buf);
-            System.setOut(tmpOut);
-            OSInfo.main(new String[] {"--arch"});
-            assertThat(buf.toString()).isEqualTo(OSInfo.getArchName());
+    private static String captureOutput(String... arguments) {
+        PrintStream previous = System.out;
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (PrintStream replacement = new PrintStream(output)) {
+            System.setOut(replacement);
+            OSInfo.main(arguments);
         } finally {
-            // reset STDOUT
-            System.setOut(out);
+            System.setOut(previous);
         }
-    }
-
-    @Test
-    public void displayOSInfo() {
-        logger.info("Hardware name: " + OSInfo.getHardwareName());
-        logger.info("OS name: " + OSInfo.getOSName());
-        logger.info("Architecture name: " + OSInfo.getArchName());
-    }
-
-    @Test
-    @SetSystemProperty(key = "io.github.idoly.sqlite.osinfo.architecture", value = "overridden")
-    @SetSystemProperty(key = "os.name", value = "Windows")
-    void testOverride() {
-        assertThat(OSInfo.getArchName()).isEqualTo("overridden");
-        assertThat(OSInfo.getNativeLibFolderPathForCurrentOS()).isEqualTo("Windows/overridden");
-    }
-
-    @Test
-    @SetSystemProperty(key = "os.arch", value = "armv7l")
-    void armV7ArchitectureUsesJdkProperties() {
-        assertThat(OSInfo.getArchName()).isEqualTo("armv7");
-    }
-
-    @Test
-    @SetSystemProperty(key = "os.arch", value = "arm64")
-    @SetSystemProperty(key = "sun.arch.data.model", value = "64")
-    void arm64ArchitectureUsesJdkProperties() {
-        assertThat(OSInfo.getArchName()).isEqualTo("aarch64");
+        return output.toString();
     }
 }

@@ -1,15 +1,117 @@
 
-include Makefile.common
+include VERSION
+
+TARGET := target
+OSINFO_CLASS := io.github.idoly.sqlite.util.OSInfo
+OSINFO_PROG := lib/io/github/idoly/sqlite/util/OSInfo.class
+
+ifndef OS_NAME
+NEED_OSINFO := 1
+endif
+ifndef OS_ARCH
+NEED_OSINFO := 1
+endif
+
+ifdef NEED_OSINFO
+ifndef JAVA_HOME
+$(error JAVA_HOME must point to JDK 25 or newer)
+endif
+JAVA := "$(JAVA_HOME)/bin/java"
+JAVAC := "$(JAVA_HOME)/bin/javac"
+ifeq ("$(wildcard $(OSINFO_PROG))","")
+$(info Building OSInfo tool)
+$(shell mkdir -p lib && $(JAVAC) -d lib src/main/java/io/github/idoly/sqlite/util/OSInfo.java)
+endif
+ifndef OS_NAME
+OS_NAME := $(shell $(JAVA) -cp lib $(OSINFO_CLASS) --os)
+endif
+ifndef OS_ARCH
+OS_ARCH := $(shell $(JAVA) -cp lib $(OSINFO_CLASS) --arch)
+endif
+endif
+
+sqlite := sqlite-$(version)
+target := $(OS_NAME)-$(OS_ARCH)
+known_targets := Linux-x86_64 Linux-aarch64 Linux-Musl-x86_64 Linux-Musl-aarch64 Mac-x86_64 Mac-aarch64 Windows-x86_64 Windows-aarch64
+
+ifeq (,$(filter $(target),$(known_targets)))
+$(error Unsupported native target: $(target))
+endif
+
+$(info Building native SQLite for $(target))
+
+CROSS_PREFIX ?=
+COMMON_CCFLAGS := -Os -fPIC
+UNIX_LINKFLAGS := -shared -static-libgcc -pthread -lm
+
+Linux-x86_64_CC := $(CROSS_PREFIX)gcc
+Linux-x86_64_STRIP := $(CROSS_PREFIX)strip
+Linux-x86_64_CCFLAGS := $(COMMON_CCFLAGS) -m64
+Linux-x86_64_LINKFLAGS := $(UNIX_LINKFLAGS)
+Linux-x86_64_LIBNAME := libsqlite3-idoly.so
+
+Linux-aarch64_CC := $(CROSS_PREFIX)gcc
+Linux-aarch64_STRIP := $(CROSS_PREFIX)strip
+Linux-aarch64_CCFLAGS := $(COMMON_CCFLAGS)
+Linux-aarch64_LINKFLAGS := $(UNIX_LINKFLAGS)
+Linux-aarch64_LIBNAME := libsqlite3-idoly.so
+
+Linux-Musl-x86_64_CC := $(CROSS_PREFIX)gcc
+Linux-Musl-x86_64_STRIP := $(CROSS_PREFIX)strip
+Linux-Musl-x86_64_CCFLAGS := $(COMMON_CCFLAGS) -m64
+Linux-Musl-x86_64_LINKFLAGS := $(UNIX_LINKFLAGS)
+Linux-Musl-x86_64_LIBNAME := libsqlite3-idoly.so
+
+Linux-Musl-aarch64_CC := $(CROSS_PREFIX)gcc
+Linux-Musl-aarch64_STRIP := $(CROSS_PREFIX)strip
+Linux-Musl-aarch64_CCFLAGS := $(COMMON_CCFLAGS)
+Linux-Musl-aarch64_LINKFLAGS := $(UNIX_LINKFLAGS)
+Linux-Musl-aarch64_LIBNAME := libsqlite3-idoly.so
+
+Mac-x86_64_CC := $(CROSS_PREFIX)clang -arch x86_64
+Mac-x86_64_STRIP := $(CROSS_PREFIX)strip -x
+Mac-x86_64_CCFLAGS := $(COMMON_CCFLAGS) -mmacosx-version-min=11
+Mac-x86_64_LINKFLAGS := -dynamiclib -lpthread -lm
+Mac-x86_64_LIBNAME := libsqlite3-idoly.dylib
+
+Mac-aarch64_CC := $(CROSS_PREFIX)clang
+Mac-aarch64_STRIP := $(CROSS_PREFIX)strip -x
+Mac-aarch64_CCFLAGS := $(COMMON_CCFLAGS) -mmacosx-version-min=11
+Mac-aarch64_LINKFLAGS := -dynamiclib -lpthread -lm
+Mac-aarch64_LIBNAME := libsqlite3-idoly.dylib
+
+Windows-x86_64_CC := $(CROSS_PREFIX)gcc
+Windows-x86_64_STRIP := $(CROSS_PREFIX)strip
+Windows-x86_64_CCFLAGS := -Os
+Windows-x86_64_LINKFLAGS := -Wl,--kill-at -shared -static-libgcc
+Windows-x86_64_LIBNAME := sqlite3-idoly.dll
+
+Windows-aarch64_CC := $(CROSS_PREFIX)clang
+Windows-aarch64_STRIP := $(CROSS_PREFIX)strip
+Windows-aarch64_CCFLAGS := -Os
+Windows-aarch64_LINKFLAGS := -Wl,--kill-at -shared -static-libgcc
+Windows-aarch64_LIBNAME := sqlite3-idoly.dll
+
+CC := $($(target)_CC)
+STRIP := $($(target)_STRIP)
+CCFLAGS := $($(target)_CCFLAGS)
+LINKFLAGS := $($(target)_LINKFLAGS)
+LIBNAME := $($(target)_LIBNAME)
+SQLITE_FLAGS := $($(target)_SQLITE_FLAGS)
+SQLITE_SRC_PREFIX := sqlite-src-$(shell ./amalgamation_version.sh $(version))
+SQLITE_AMAL_PREFIX := sqlite-amalgamation-$(shell ./amalgamation_version.sh $(version))
 
 RESOURCE_DIR = src/main/resources
 
-.phony: all package native native-all deploy
+.PHONY: all package native native-all clean clean-native clean-java clean-tests \
+        win64 win-arm64 mac64 mac-arm64 \
+        linux64 linux-arm64 linux-musl64 linux-musl-arm64
 
 all: package
 
-DOCKER_RUN_OPTS=--rm
-MVN:=mvn
-CODESIGN:=docker run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir gotson/rcodesign sign
+CONTAINER_ENGINE ?= docker
+DOCKER_RUN_OPTS := --rm
+MVN := mvn
 SQLITE_OUT:=$(TARGET)/$(sqlite)-$(OS_NAME)-$(OS_ARCH)
 SQLITE_OBJ?=$(SQLITE_OUT)/sqlite3.o
 SQLITE_SRC_ARCHIVE:=$(TARGET)/$(sqlite)-src.zip
@@ -21,10 +123,6 @@ SQLITE_ARCHIVE:=$(TARGET)/$(sqlite)-amal.zip
 SQLITE_UNPACKED:=$(TARGET)/sqlite-unpack.log
 SQLITE_SOURCE?=$(TARGET)/$(SQLITE_AMAL_PREFIX)
 SQLITE_HEADER?=$(SQLITE_SOURCE)/sqlite3.h
-ifneq ($(SQLITE_SOURCE),$(TARGET)/$(SQLITE_AMAL_PREFIX))
-	created := $(shell touch $(SQLITE_UNPACKED))
-endif
-ENABLE_UPDATE_DELETE_LIMIT?=1
 SQLITE_EXTENSION_SOURCES := $(wildcard src/main/c/*.c)
 
 SQLITE_INCLUDE := $(shell dirname "$(SQLITE_HEADER)")
@@ -33,7 +131,12 @@ CCFLAGS:= -I$(SQLITE_OUT) -I$(SQLITE_INCLUDE) $(CCFLAGS)
 
 $(SQLITE_SRC_ARCHIVE):
 	mkdir -p $(@D)
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/2026/$(SQLITE_SRC_PREFIX).zip
+	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/$(sqlite_year)/$(SQLITE_SRC_PREFIX).zip
+	if command -v sha256sum >/dev/null; then \
+		test "$$(sha256sum '$@' | awk '{print $$1}')" = '$(sqlite_src_sha256)'; \
+	else \
+		test "$$(shasum -a 256 '$@' | awk '{print $$1}')" = '$(sqlite_src_sha256)'; \
+	fi
 
 $(SQLITE_SRC): $(SQLITE_SRC_ARCHIVE)
 	unzip -qo $< -d $(TARGET)/tmp-src.$(version)
@@ -44,24 +147,9 @@ $(SQLITE_AMALGAMATION_ZIP_FROM_SRC): $(SQLITE_SRC)
 	cp $(SQLITE_SRC_TMP)/sqlite3.c $(SQLITE_SRC_TMP)/sqlite3.h $(SQLITE_SRC_TMP)/sqlite3ext.h $(SQLITE_AMALGAMATION_FROM_SRC)/
 	(cd $(SQLITE_AMALGAMATION_FROM_SRC)/.. && zip -r $(SQLITE_AMAL_PREFIX).zip $(SQLITE_AMAL_PREFIX))
 
-ifneq ($(ENABLE_UPDATE_DELETE_LIMIT),1)
-ENABLE_UPDATE_DELETE_LIMIT_FLAG :=
-$(SQLITE_ARCHIVE):
-else
-ENABLE_UPDATE_DELETE_LIMIT_FLAG := -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
 $(SQLITE_ARCHIVE): $(SQLITE_AMALGAMATION_ZIP_FROM_SRC)
-endif
 	@mkdir -p $(@D)
-	cp -v $(SQLITE_AMALGAMATION_ZIP_FROM_SRC) $@ || \
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/2026/$(SQLITE_AMAL_PREFIX).zip || \
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/2025/$(SQLITE_AMAL_PREFIX).zip || \
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/2024/$(SQLITE_AMAL_PREFIX).zip || \
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/2023/$(SQLITE_AMAL_PREFIX).zip || \
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/2022/$(SQLITE_AMAL_PREFIX).zip || \
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/2021/$(SQLITE_AMAL_PREFIX).zip || \
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/2020/$(SQLITE_AMAL_PREFIX).zip || \
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/$(SQLITE_AMAL_PREFIX).zip || \
-	curl -L --max-redirs 0 -f -o$@ https://www.sqlite.org/$(SQLITE_OLD_AMAL_PREFIX).zip
+	cp -v $< $@
 
 $(SQLITE_UNPACKED): $(SQLITE_ARCHIVE)
 	unzip -qo $< -d $(TARGET)/tmp.$(version)
@@ -112,7 +200,7 @@ $(SQLITE_OUT)/sqlite3.o : $(SQLITE_UNPACKED)
 	    -DSQLITE_MAX_ATTACHED=125 \
 	    -DSQLITE_MAX_PAGE_COUNT=4294967294 \
 	    -DSQLITE_DISABLE_PAGECACHE_OVERFLOW_STATS \
-	    $(ENABLE_UPDATE_DELETE_LIMIT_FLAG) \
+	    -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT \
 	    $(SQLITE_FLAGS) \
 	    $(SQLITE_OUT)/sqlite3.c
 
@@ -130,8 +218,7 @@ NATIVE_DIR=src/main/resources/io/github/idoly/sqlite/native/$(OS_NAME)/$(OS_ARCH
 NATIVE_TARGET_DIR:=$(TARGET)/classes/io/github/idoly/sqlite/native/$(OS_NAME)/$(OS_ARCH)
 NATIVE_DLL:=$(NATIVE_DIR)/$(LIBNAME)
 
-# For cross-compilation, install docker. See also https://github.com/dockcross/dockcross
-native-all: native win32 win64 win-armv7 win-arm64 mac64-signed mac-arm64-signed linux32 linux64 freebsd32 freebsd64 freebsd-arm64 linux-arm linux-armv6 linux-armv7 linux-arm64 linux-ppc64 linux-musl32 linux-musl64 linux-musl-arm64 linux-riscv64
+native-all: win64 win-arm64 mac64 mac-arm64 linux64 linux-arm64 linux-musl64 linux-musl-arm64
 
 native: $(NATIVE_DLL)
 
@@ -141,74 +228,32 @@ $(NATIVE_DLL): $(SQLITE_OUT)/$(LIBNAME)
 	@mkdir -p $(NATIVE_TARGET_DIR)
 	cp $< $(NATIVE_TARGET_DIR)/$(LIBNAME)
 
-win32: $(SQLITE_UNPACKED)
-	./docker/dockcross-windows-x86 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=i686-w64-mingw32.static- OS_NAME=Windows OS_ARCH=x86'
-
 win64: $(SQLITE_UNPACKED)
-	./docker/dockcross-windows-x64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=x86_64-w64-mingw32.static- OS_NAME=Windows OS_ARCH=x86_64'
-
-win-armv7: $(SQLITE_UNPACKED)
-	./docker/dockcross-windows-armv7 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=armv7-w64-mingw32- OS_NAME=Windows OS_ARCH=armv7'
+	OCI_EXE=$(CONTAINER_ENGINE) ./docker/dockcross-windows-x64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=x86_64-w64-mingw32.static- OS_NAME=Windows OS_ARCH=x86_64'
 
 win-arm64: $(SQLITE_UNPACKED)
-	./docker/dockcross-windows-arm64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=aarch64-w64-mingw32- OS_NAME=Windows OS_ARCH=aarch64'
-
-linux32: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/work xerial/centos5-linux-x86 bash -c 'make clean-native native OS_NAME=Linux OS_ARCH=x86'
+	OCI_EXE=$(CONTAINER_ENGINE) ./docker/dockcross-windows-arm64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=aarch64-w64-mingw32- OS_NAME=Windows OS_ARCH=aarch64'
 
 linux64: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/work xerial/centos5-linux-x86_64 bash -c 'make clean-native native OS_NAME=Linux OS_ARCH=x86_64'
-
-freebsd32: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir empterdose/freebsd-cross-build:9.3 sh -c 'apk add bash; apk add openjdk8; apk add perl; make clean-native native OS_NAME=FreeBSD OS_ARCH=x86 CROSS_PREFIX=i386-freebsd9-'
-
-freebsd64: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir empterdose/freebsd-cross-build:9.3 sh -c 'apk add bash; apk add openjdk8; apk add perl; make clean-native native OS_NAME=FreeBSD OS_ARCH=x86_64 CROSS_PREFIX=x86_64-freebsd9-'
-
-freebsd-arm64: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir gotson/freebsd-cross-build:aarch64-11.4 sh -c 'make clean-native native OS_NAME=FreeBSD OS_ARCH=aarch64 CROSS_PREFIX=aarch64-unknown-freebsd11-'
-
-linux-musl32: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/work gotson/alpine-linux-x86 bash -c 'make clean-native native OS_NAME=Linux-Musl OS_ARCH=x86'
-
-linux-musl64: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/work xerial/alpine-linux-x86_64 bash -c 'make clean-native native OS_NAME=Linux-Musl OS_ARCH=x86_64'
-
-linux-musl-arm64: $(SQLITE_UNPACKED)
-	./docker/dockcross-musl-arm64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=aarch64-linux-musl- OS_NAME=Linux-Musl OS_ARCH=aarch64'
-
-linux-arm: $(SQLITE_UNPACKED)
-	./docker/dockcross-armv5 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=armv5-unknown-linux-gnueabi- OS_NAME=Linux OS_ARCH=arm'
-
-linux-armv6: $(SQLITE_UNPACKED)
-	./docker/dockcross-armv6-lts -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=armv6-unknown-linux-gnueabihf- OS_NAME=Linux OS_ARCH=armv6'
-
-linux-armv7: $(SQLITE_UNPACKED)
-	./docker/dockcross-armv7a-lts -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=arm-cortexa8_neon-linux-gnueabihf- OS_NAME=Linux OS_ARCH=armv7'
+	$(MAKE) clean-native native OS_NAME=Linux OS_ARCH=x86_64
 
 linux-arm64: $(SQLITE_UNPACKED)
-	./docker/dockcross-arm64-lts -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=aarch64-unknown-linux-gnu- OS_NAME=Linux OS_ARCH=aarch64'
+	OCI_EXE=$(CONTAINER_ENGINE) ./docker/dockcross-arm64-lts -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=aarch64-unknown-linux-gnu- OS_NAME=Linux OS_ARCH=aarch64'
 
-linux-ppc64: $(SQLITE_UNPACKED)
-	./docker/dockcross-ppc64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=powerpc64le-unknown-linux-gnu- OS_NAME=Linux OS_ARCH=ppc64'
+linux-musl64: $(SQLITE_UNPACKED)
+	$(CONTAINER_ENGINE) run $(DOCKER_RUN_OPTS) -v $$PWD:/work -w /work alpine:3.22 sh -c 'apk add --no-cache build-base make perl && make clean-native native OS_NAME=Linux-Musl OS_ARCH=x86_64'
 
-linux-riscv64: $(SQLITE_UNPACKED)
-	./docker/dockcross-riscv64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=riscv64-unknown-linux-gnu- OS_NAME=Linux OS_ARCH=riscv64'
+linux-musl-arm64: $(SQLITE_UNPACKED)
+	OCI_EXE=$(CONTAINER_ENGINE) ./docker/dockcross-musl-arm64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=aarch64-linux-musl- OS_NAME=Linux-Musl OS_ARCH=aarch64'
 
 mac64: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir -e CROSS_TRIPLE=x86_64-apple-darwin multiarch/crossbuild make clean-native native OS_NAME=Mac OS_ARCH=x86_64
+	$(CONTAINER_ENGINE) run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir docker.io/gotson/crossbuild make clean-native native OS_NAME=Mac OS_ARCH=x86_64 CROSS_PREFIX="/usr/osxcross/bin/x86_64-apple-darwin20.4-"
 
 mac-arm64: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir -e CROSS_TRIPLE=aarch64-apple-darwin gotson/crossbuild make clean-native native OS_NAME=Mac OS_ARCH=aarch64 CROSS_PREFIX="/usr/osxcross/bin/aarch64-apple-darwin20.4-"
+	$(CONTAINER_ENGINE) run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir -e CROSS_TRIPLE=aarch64-apple-darwin docker.io/gotson/crossbuild make clean-native native OS_NAME=Mac OS_ARCH=aarch64 CROSS_PREFIX="/usr/osxcross/bin/aarch64-apple-darwin20.4-"
 
-mac64-signed: mac64
-	$(CODESIGN) src/main/resources/io/github/idoly/sqlite/native/Mac/x86_64/libsqlitejdbc.dylib
 
-mac-arm64-signed: mac-arm64
-	$(CODESIGN) src/main/resources/io/github/idoly/sqlite/native/Mac/aarch64/libsqlitejdbc.dylib
-
-package: native-all
-	rm -rf target/dependency-maven-plugin-markers
+package: native
 	$(MVN) package
 
 clean-native:
@@ -220,15 +265,3 @@ clean-java:
 
 clean-tests:
 	rm -rf $(TARGET)/{surefire*,testdb.jar*}
-
-docker-linux64:
-	docker build -f docker/Dockerfile.linux_x86_64 -t xerial/centos5-linux-x86_64 .
-
-docker-linux32:
-	docker build -f docker/Dockerfile.linux_x86 -t xerial/centos5-linux-x86 .
-
-docker-linux-musl32:
-	docker build -f docker/Dockerfile.alpine-linux_x86 -t gotson/alpine-linux-x86 .
-
-docker-linux-musl64:
-	docker build -f docker/Dockerfile.alpine-linux_x86_64 -t xerial/alpine-linux-x86_64 .

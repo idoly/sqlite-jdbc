@@ -11,6 +11,10 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
 
       - name: Build matrix from Makefile
         id: set-matrix
@@ -33,6 +37,10 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
 
       # Delete existing libs so we only upload the generated one into the artifact
       - name: Delete existing native libs
@@ -42,6 +50,11 @@ jobs:
         run: make ${{ matrix.target }}
         env:
           OCI_EXE: docker
+
+      - name: Verify native artifact
+        run: |
+          test "$(find src/main/resources/io/github/idoly/sqlite/native -type f | wc -l)" -eq 1
+          file src/main/resources/io/github/idoly/sqlite/native/*/*/*
 
       - name: Upload native libraries
         uses: actions/upload-artifact@v7
@@ -62,6 +75,11 @@ jobs:
           pattern: native-libs-*
           merge-multiple: true
           path: src/main/resources/io/github/idoly/sqlite/native/
+
+      - name: Verify complete platform set
+        run: |
+          test "$(find src/main/resources/io/github/idoly/sqlite/native -type f | wc -l)" -eq 8
+          find src/main/resources/io/github/idoly/sqlite/native -type f -print0 | sort -z | xargs -0 sha256sum
 
       - run: git status
 

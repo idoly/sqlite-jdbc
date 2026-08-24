@@ -28,11 +28,13 @@ public class SqliteJdbcFeature implements Feature {
     private void handleLibraryResources() {
         String libraryPath = LibraryLoaderUtil.getNativeLibResourcePath();
         String libraryName = LibraryLoaderUtil.getNativeLibName();
-        if (LibraryLoaderUtil.hasNativeLib(libraryPath, libraryName)) {
-            String libraryResource = libraryPath + "/" + libraryName;
-            RuntimeResourceAccess.addResource(
-                    SQLiteJDBCLoader.class.getModule(), libraryResource.substring(1));
+        if (!LibraryLoaderUtil.hasNativeLib(libraryPath, libraryName)) {
+            throw new IllegalStateException(
+                    "Missing packaged SQLite library " + libraryPath + "/" + libraryName);
         }
+        String libraryResource = libraryPath + "/" + libraryName;
+        RuntimeResourceAccess.addResource(
+                SQLiteJDBCLoader.class.getModule(), libraryResource.substring(1));
     }
 
     private Method method(Class<?> clazz, String methodName, Class<?>... args) {

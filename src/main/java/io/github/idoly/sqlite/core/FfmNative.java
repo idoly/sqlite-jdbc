@@ -27,7 +27,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1346,34 +1345,32 @@ final class FfmNative {
     }
 
     private static SymbolLookup loadSymbols() {
-        Optional<Path> packagedLibrary = extractPackagedLibrary();
-        return packagedLibrary
-                .<SymbolLookup>map(path -> SymbolLookup.libraryLookup(path, LIBRARY_ARENA))
-                .orElseGet(() -> SymbolLookup.libraryLookup(systemLibraryName(), LIBRARY_ARENA));
+        return SymbolLookup.libraryLookup(extractPackagedLibrary(), LIBRARY_ARENA);
     }
 
-    private static Optional<Path> extractPackagedLibrary() {
+    private static Path extractPackagedLibrary() {
         String libraryName = LibraryLoaderUtil.getNativeLibName();
         String resource = LibraryLoaderUtil.getNativeLibResourcePath() + "/" + libraryName;
         try (InputStream input = FfmNative.class.getResourceAsStream(resource)) {
-            if (input == null) return Optional.empty();
+            if (input == null) {
+                throw new IllegalStateException(
+                        "No packaged SQLite library for "
+                                + System.getProperty("os.name", "unknown")
+                                + "/"
+                                + System.getProperty("os.arch", "unknown")
+                                + "; expected resource "
+                                + resource);
+            }
             Path directory = Files.createTempDirectory("sqlite-jdbc-ffm-");
             Path library = directory.resolve(libraryName);
             Files.copy(input, library, StandardCopyOption.REPLACE_EXISTING);
             library.toFile().deleteOnExit();
             directory.toFile().deleteOnExit();
-            return Optional.of(library.toAbsolutePath());
+            return library.toAbsolutePath();
         } catch (IOException error) {
             throw new IllegalStateException(
                     "Could not extract packaged SQLite library " + resource, error);
         }
-    }
-
-    private static String systemLibraryName() {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (os.contains("win")) return "sqlite3";
-        if (os.contains("mac") || os.contains("darwin")) return "libsqlite3.dylib";
-        return "libsqlite3.so.0";
     }
 
     private static MethodHandle downcall(String symbol, FunctionDescriptor descriptor) {

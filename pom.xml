@@ -10,6 +10,21 @@
     <description>JDK 25 FFM SQLite JDBC driver</description>
     <url>https://github.com/idoly/sqlite-jdbc</url>
 
+    <developers>
+        <developer>
+            <id>idoly</id>
+            <name>idoly</name>
+            <url>https://github.com/idoly</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/idoly/sqlite-jdbc.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/idoly/sqlite-jdbc.git</developerConnection>
+        <url>https://github.com/idoly/sqlite-jdbc</url>
+        <tag>HEAD</tag>
+    </scm>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.resources.propertiesEncoding>UTF-8</maven.resources.propertiesEncoding>
@@ -47,8 +62,6 @@
                 <targetPath>META-INF</targetPath>
                 <includes>
                     <include>LICENSE</include>
-                    <include>LICENSE.zentus</include>
-                    <include>NOTICE</include>
                 </includes>
             </resource>
         </resources>
@@ -92,6 +105,67 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <configuration>
+                            <excludeResources>true</excludeResources>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.11.2</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.8</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.8.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
         <profile>
             <id>native</id>
             <build>

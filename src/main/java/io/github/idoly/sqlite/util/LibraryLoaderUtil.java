@@ -3,21 +3,18 @@ package io.github.idoly.sqlite.util;
 import io.github.idoly.sqlite.SQLiteJDBCLoader;
 
 public final class LibraryLoaderUtil {
-    public static final String NATIVE_LIB_BASE_NAME = "sqlitejdbc";
+    public static final String NATIVE_LIB_BASE_NAME = "sqlite3-idoly";
 
     private LibraryLoaderUtil() {}
 
-    /**
-     * Get the OS-specific resource directory within the jar, where the relevant sqlitejdbc native
-     * library is located.
-     */
+    /** Get the resource directory containing the SQLite library for the current platform. */
     public static String getNativeLibResourcePath() {
         String packagePath = SQLiteJDBCLoader.class.getPackage().getName().replace(".", "/");
         return String.format(
                 "/%s/native/%s", packagePath, OSInfo.getNativeLibFolderPathForCurrentOS());
     }
 
-    /** Get the OS-specific name of the sqlitejdbc native library. */
+    /** Get the platform-specific SQLite library name. */
     public static String getNativeLibName() {
         return System.mapLibraryName(NATIVE_LIB_BASE_NAME);
     }

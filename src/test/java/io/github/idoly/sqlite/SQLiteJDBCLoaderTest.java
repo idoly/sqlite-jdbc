@@ -103,8 +103,11 @@ public class SQLiteJDBCLoaderTest {
     }
 
     @Test
-    public void version() {
+    public void version() throws SQLException {
         assertThat(SQLiteJDBCLoader.getVersion()).isNotEqualTo("unknown");
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:")) {
+            assertThat(((SQLiteConnection) connection).libversion()).isEqualTo("3.53.2");
+        }
     }
 
     @Test

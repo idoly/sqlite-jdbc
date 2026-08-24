@@ -1,86 +1,26 @@
-/*--------------------------------------------------------------------------
- *  Copyright 2008 Taro L. Saito
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *--------------------------------------------------------------------------*/
 package io.github.idoly.sqlite.util;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Locale;
-import java.util.Map;
 import java.util.stream.Stream;
 
-/**
- * Provides OS name and architecture name.
- *
- * @author leo
- */
+/** Resolves the supported native-library platform from JDK system properties. */
 public final class OSInfo {
-    public static final String X86 = "x86";
     public static final String X86_64 = "x86_64";
-    public static final String IA64_32 = "ia64_32";
-    public static final String IA64 = "ia64";
-    public static final String PPC = "ppc";
-    public static final String PPC64 = "ppc64";
-    public static final String RISCV64 = "riscv64";
+    public static final String AARCH64 = "aarch64";
 
     private OSInfo() {}
 
-    private static final Map<String, String> ARCHITECTURE_ALIASES =
-            Map.ofEntries(
-                    Map.entry(X86, X86),
-                    Map.entry("i386", X86),
-                    Map.entry("i486", X86),
-                    Map.entry("i586", X86),
-                    Map.entry("i686", X86),
-                    Map.entry("pentium", X86),
-                    Map.entry(X86_64, X86_64),
-                    Map.entry("amd64", X86_64),
-                    Map.entry("em64t", X86_64),
-                    Map.entry("universal", X86_64),
-                    Map.entry(IA64, IA64),
-                    Map.entry("ia64w", IA64),
-                    Map.entry(IA64_32, IA64_32),
-                    Map.entry("ia64n", IA64_32),
-                    Map.entry(PPC, PPC),
-                    Map.entry("power", PPC),
-                    Map.entry("powerpc", PPC),
-                    Map.entry("power_pc", PPC),
-                    Map.entry("power_rs", PPC),
-                    Map.entry(PPC64, PPC64),
-                    Map.entry("power64", PPC64),
-                    Map.entry("powerpc64", PPC64),
-                    Map.entry("power_pc64", PPC64),
-                    Map.entry("power_rs64", PPC64),
-                    Map.entry("ppc64el", PPC64),
-                    Map.entry("ppc64le", PPC64),
-                    Map.entry(RISCV64, RISCV64));
-
     public static void main(String[] args) {
-        if (args.length >= 1) {
-            if ("--os".equals(args[0])) {
-                System.out.print(getOSName());
-                return;
-            } else if ("--arch".equals(args[0])) {
-                System.out.print(getArchName());
-                return;
-            }
+        if (args.length > 0 && "--os".equals(args[0])) {
+            System.out.print(getOSName());
+        } else if (args.length > 0 && "--arch".equals(args[0])) {
+            System.out.print(getArchName());
+        } else {
+            System.out.print(getNativeLibFolderPathForCurrentOS());
         }
-
-        System.out.print(getNativeLibFolderPathForCurrentOS());
     }
 
     public static String getNativeLibFolderPathForCurrentOS() {
@@ -88,92 +28,45 @@ public final class OSInfo {
     }
 
     public static String getOSName() {
-        return translateOSNameToFolderName(System.getProperty("os.name"));
-    }
-
-    public static boolean isMusl() {
-        Path mapFilesDir = Paths.get("/proc/self/map_files");
-        try (Stream<Path> dirStream = Files.list(mapFilesDir)) {
-            boolean found =
-                    dirStream
-                            .map(OSInfo::toRealPathOrEmpty)
-                            .anyMatch(path -> path.toLowerCase(Locale.ROOT).contains("musl"));
-            if (found) {
-                return true;
-            }
-        } catch (Exception ignored) {
-        }
-        // fall back to checking for alpine linux in the event we're using an older kernel which
-        // may not fail the above check
-        return isAlpineLinux();
-    }
-
-    private static String toRealPathOrEmpty(Path path) {
-        try {
-            return path.toRealPath().toString();
-        } catch (IOException e) {
-            return "";
-        }
-    }
-
-    private static boolean isAlpineLinux() {
-        try (Stream<String> osLines = Files.lines(Paths.get("/etc/os-release"))) {
-            return osLines.anyMatch(l -> l.startsWith("ID") && l.contains("alpine"));
-        } catch (Exception ignored2) {
-        }
-        return false;
-    }
-
-    static String getHardwareName() {
-        return System.getProperty("os.arch", "unknown");
-    }
-
-    static String resolveArmArchType() {
-        String architecture = getHardwareName().toLowerCase(Locale.ROOT);
-        if (architecture.startsWith("armv6")) return "armv6";
-        if (architecture.startsWith("armv7")) return "armv7";
-        if (architecture.startsWith("aarch64") || architecture.startsWith("arm64")) {
-            return "32".equals(System.getProperty("sun.arch.data.model")) ? "armv7" : "aarch64";
-        }
-
-        String abi = System.getProperty("sun.arch.abi", "");
-        return abi.startsWith("gnueabihf") ? "armv7" : "arm";
+        String osName = System.getProperty("os.name", "");
+        if (osName.contains("Windows")) return "Windows";
+        if (osName.contains("Mac") || osName.contains("Darwin")) return "Mac";
+        if (osName.contains("Linux")) return isMusl() ? "Linux-Musl" : "Linux";
+        throw new IllegalStateException("Unsupported operating system: " + osName);
     }
 
     public static String getArchName() {
         String override = System.getProperty("io.github.idoly.sqlite.osinfo.architecture");
-        if (override != null) {
-            return override;
-        }
+        if (override != null && !override.isBlank()) return override;
 
-        String osArch = System.getProperty("os.arch", "unknown");
-
-        if (osArch.startsWith("arm")) {
-            osArch = resolveArmArchType();
-        } else {
-            String alias = ARCHITECTURE_ALIASES.get(osArch.toLowerCase(Locale.ROOT));
-            if (alias != null) return alias;
-        }
-        return translateArchNameToFolderName(osArch);
+        String architecture = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+        return switch (architecture) {
+            case "amd64", "x86_64" -> X86_64;
+            case "aarch64", "arm64" -> AARCH64;
+            default -> throw new IllegalStateException("Unsupported architecture: " + architecture);
+        };
     }
 
-    static String translateOSNameToFolderName(String osName) {
-        if (osName.contains("Windows")) {
-            return "Windows";
-        } else if (osName.contains("Mac") || osName.contains("Darwin")) {
-            return "Mac";
-        } else if (osName.contains("AIX")) {
-            return "AIX";
-        } else if (isMusl()) {
-            return "Linux-Musl";
-        } else if (osName.contains("Linux")) {
-            return "Linux";
-        } else {
-            return osName.replaceAll("\\W", "");
+    public static boolean isMusl() {
+        Path mapFilesDirectory = Path.of("/proc/self/map_files");
+        try (Stream<Path> paths = Files.list(mapFilesDirectory)) {
+            if (paths.map(OSInfo::realPath).anyMatch(path -> path.contains("musl"))) return true;
+        } catch (IOException | SecurityException ignored) {
+            // /proc may be unavailable in containers or restricted environments.
+        }
+
+        try (Stream<String> lines = Files.lines(Path.of("/etc/os-release"))) {
+            return lines.anyMatch(line -> line.equals("ID=alpine") || line.equals("ID=\"alpine\""));
+        } catch (IOException | SecurityException ignored) {
+            return false;
         }
     }
 
-    static String translateArchNameToFolderName(String archName) {
-        return archName.replaceAll("\\W", "");
+    private static String realPath(Path path) {
+        try {
+            return path.toRealPath().toString().toLowerCase(Locale.ROOT);
+        } catch (IOException | SecurityException ignored) {
+            return "";
+        }
     }
 }

@@ -1,6 +1,6 @@
 module io.github.idoly.sqlitejdbc {
     requires transitive java.sql;
-    requires transitive java.sql.rowset;
+    requires static java.sql.rowset;
     requires static org.graalvm.nativeimage;
 
     exports io.github.idoly.sqlite;
