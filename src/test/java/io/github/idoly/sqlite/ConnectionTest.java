@@ -1,6 +1,7 @@
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 import io.github.idoly.sqlite.SQLiteConfig.JournalMode;
 import io.github.idoly.sqlite.SQLiteConfig.Pragma;
@@ -499,6 +500,7 @@ public class ConnectionTest {
     @Test
     public void openNonExistingFileInReadOnlyDirectory(@TempDir Path tmpDir) {
         assertThat(tmpDir.toFile().setReadOnly()).isTrue();
+        assumeThat(Files.isWritable(tmpDir)).isFalse();
         assertThat(Files.exists(tmpDir)).isTrue();
         Path nonExisting = tmpDir.resolve("non_existing.db").toAbsolutePath();
         assertThatThrownBy(() -> Files.createFile(nonExisting))

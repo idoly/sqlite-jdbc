@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assumptions.assumeThat;
 import io.github.idoly.sqlite.core.DB;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -51,6 +52,7 @@ public class ErrorMessageTest {
         }
 
         assumeThat(file.setReadOnly()).isTrue();
+        assumeThat(Files.isWritable(file.toPath())).isFalse();
 
         try (Connection conn =
                         DriverManager.getConnection("jdbc:sqlite:" + file.getAbsolutePath());
