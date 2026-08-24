@@ -279,34 +279,21 @@ public abstract class BaseConnection extends SQLiteConnection {
      * @see java.sql.Connection#setSavepoint()
      */
     public Savepoint setSavepoint() throws SQLException {
-        checkOpen();
-        if (getAutoCommit()) {
-            // when a SAVEPOINT is the outermost savepoint and not
-            // with a BEGIN...COMMIT then the behavior is the same
-            // as BEGIN DEFERRED TRANSACTION
-            // https://www.sqlite.org/lang_savepoint.html
-            getConnectionConfig().setAutoCommit(false);
-        }
-        Savepoint sp = new SavepointImpl(savePoint.incrementAndGet());
-        getDatabase().exec(String.format("SAVEPOINT %s", sp.getSavepointName()), false);
-        return sp;
+        checkSavepointMode();
+        SavepointImpl savepoint = new SavepointImpl(this, savePoint.incrementAndGet());
+        getDatabase().exec("SAVEPOINT " + quoteIdentifier(savepoint.sqliteName()), false);
+        return savepoint;
     }
 
     /**
      * @see java.sql.Connection#setSavepoint(java.lang.String)
      */
     public Savepoint setSavepoint(String name) throws SQLException {
-        checkOpen();
-        if (getAutoCommit()) {
-            // when a SAVEPOINT is the outermost savepoint and not
-            // with a BEGIN...COMMIT then the behavior is the same
-            // as BEGIN DEFERRED TRANSACTION
-            // https://www.sqlite.org/lang_savepoint.html
-            getConnectionConfig().setAutoCommit(false);
-        }
-        Savepoint sp = new SavepointImpl(savePoint.incrementAndGet(), name);
-        getDatabase().exec(String.format("SAVEPOINT %s", sp.getSavepointName()), false);
-        return sp;
+        checkSavepointMode();
+        if (name == null) throw new SQLException("savepoint name must not be null");
+        SavepointImpl savepoint = new SavepointImpl(this, savePoint.incrementAndGet(), name);
+        getDatabase().exec("SAVEPOINT " + quoteIdentifier(savepoint.sqliteName()), false);
+        return savepoint;
     }
 
     /**
@@ -317,8 +304,9 @@ public abstract class BaseConnection extends SQLiteConnection {
         if (getAutoCommit()) {
             throw new SQLException("database in auto-commit mode");
         }
+        SavepointImpl sqliteSavepoint = requireSavepoint(savepoint);
         getDatabase()
-                .exec(String.format("RELEASE SAVEPOINT %s", savepoint.getSavepointName()), false);
+                .exec("RELEASE SAVEPOINT " + quoteIdentifier(sqliteSavepoint.sqliteName()), false);
     }
 
     /**
@@ -329,10 +317,28 @@ public abstract class BaseConnection extends SQLiteConnection {
         if (getAutoCommit()) {
             throw new SQLException("database in auto-commit mode");
         }
+        SavepointImpl sqliteSavepoint = requireSavepoint(savepoint);
         getDatabase()
                 .exec(
-                        String.format("ROLLBACK TO SAVEPOINT %s", savepoint.getSavepointName()),
+                        "ROLLBACK TO SAVEPOINT " + quoteIdentifier(sqliteSavepoint.sqliteName()),
                         getAutoCommit());
+    }
+
+    private void checkSavepointMode() throws SQLException {
+        checkOpen();
+        if (getAutoCommit()) throw new SQLException("database in auto-commit mode");
+    }
+
+    private SavepointImpl requireSavepoint(Savepoint savepoint) throws SQLException {
+        if (!(savepoint instanceof SavepointImpl sqliteSavepoint)
+                || !sqliteSavepoint.belongsTo(this)) {
+            throw new SQLException("savepoint does not belong to this connection");
+        }
+        return sqliteSavepoint;
+    }
+
+    private static String quoteIdentifier(String identifier) {
+        return '"' + identifier.replace("\"", "\"\"") + '"';
     }
 
     public Struct createStruct(String t, Object[] attr) throws SQLException {

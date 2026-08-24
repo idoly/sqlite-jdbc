@@ -12,11 +12,13 @@ public class DatabaseMetaDataImpl extends BaseDatabaseMetaData {
     }
 
     // JDBC 4
-    public <T> T unwrap(Class<T> iface) throws ClassCastException {
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());
         return iface.cast(this);
     }
 
-    public boolean isWrapperFor(Class<?> iface) {
+    public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        if (iface == null) throw new SQLException("interface must not be null");
         return iface.isInstance(this);
     }
 

@@ -170,11 +170,25 @@ public final class SQLitePooledConnection implements PooledConnection {
             if (name.equals("isValid") && closed.get()) return false;
             requireOpen();
 
-            if (name.equals("unwrap") && ((Class<?>) arguments[0]).isInstance(proxy)) {
-                return proxy;
+            if (name.equals("abort")) {
+                try {
+                    method.invoke(physical, arguments);
+                } catch (InvocationTargetException error) {
+                    throw error.getCause();
+                }
+                synchronized (SQLitePooledConnection.this) {
+                    detach(this);
+                }
+                if (errorReported.compareAndSet(false, true)) {
+                    fireConnectionError(new SQLException("SQLite connection was aborted"));
+                }
+                return null;
             }
-            if (name.equals("isWrapperFor") && ((Class<?>) arguments[0]).isInstance(proxy)) {
-                return true;
+
+            if (name.equals("unwrap") || name.equals("isWrapperFor")) {
+                Class<?> iface = (Class<?>) arguments[0];
+                if (iface == null) throw new SQLException("interface must not be null");
+                if (iface.isInstance(proxy)) return name.equals("unwrap") ? proxy : true;
             }
 
             try {
@@ -257,7 +271,17 @@ public final class SQLitePooledConnection implements PooledConnection {
                                     return invokeObjectMethod(metadataProxy, method, arguments);
                                 }
                                 requireOpen();
-                                if (method.getName().equals("getConnection")) return proxy;
+                                String name = method.getName();
+                                if (name.equals("getConnection")) return proxy;
+                                if (name.equals("unwrap") || name.equals("isWrapperFor")) {
+                                    Class<?> iface = (Class<?>) arguments[0];
+                                    if (iface == null) {
+                                        throw new SQLException("interface must not be null");
+                                    }
+                                    if (iface.isInstance(metadataProxy)) {
+                                        return name.equals("unwrap") ? metadataProxy : true;
+                                    }
+                                }
                                 try {
                                     return method.invoke(metadata, arguments);
                                 } catch (InvocationTargetException error) {
@@ -324,6 +348,11 @@ public final class SQLitePooledConnection implements PooledConnection {
                 }
                 requireOpen();
                 if (statementClosed.get()) throw new SQLException("Statement is closed");
+                if (name.equals("unwrap") || name.equals("isWrapperFor")) {
+                    Class<?> iface = (Class<?>) arguments[0];
+                    if (iface == null) throw new SQLException("interface must not be null");
+                    if (iface.isInstance(proxy)) return name.equals("unwrap") ? proxy : true;
+                }
 
                 try {
                     return method.invoke(statement, arguments);

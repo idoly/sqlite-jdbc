@@ -54,6 +54,7 @@ public abstract class BaseResultSet extends CoreResultSet {
      * @see java.sql.ResultSet#next()
      */
     public boolean next() throws SQLException {
+        if (stmt.conn.isClosed()) throw new SQLException("ResultSet closed");
         if (!open || emptyResultSet || pastLastRow) {
             return false; // finished ResultSet
         }

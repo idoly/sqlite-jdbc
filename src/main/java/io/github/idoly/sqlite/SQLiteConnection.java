@@ -18,6 +18,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -123,24 +124,45 @@ public abstract class SQLiteConnection implements Connection {
     }
 
     public void setSchema(String schema) throws SQLException {
-        // TODO
+        checkOpen();
+        throw new SQLFeatureNotSupportedException("SQLite has no current schema");
     }
 
     public String getSchema() throws SQLException {
-        // TODO
+        checkOpen();
         return null;
     }
 
     public void abort(Executor executor) throws SQLException {
-        // TODO
+        if (executor == null) throw new SQLException("executor must not be null");
+        if (isClosed()) return;
+        try {
+            executor.execute(
+                    () -> {
+                        try {
+                            close();
+                        } catch (SQLException error) {
+                            throw new IllegalStateException(
+                                    "Could not abort SQLite connection", error);
+                        }
+                    });
+        } catch (RuntimeException error) {
+            throw new SQLException("Could not schedule SQLite connection abort", error);
+        }
     }
 
     public void setNetworkTimeout(Executor executor, int milliseconds) throws SQLException {
-        // TODO
+        checkOpen();
+        if (executor == null) throw new SQLException("executor must not be null");
+        if (milliseconds < 0) throw new SQLException("milliseconds must be >= 0");
+        if (milliseconds != 0) {
+            throw new SQLFeatureNotSupportedException(
+                    "SQLite does not use a network connection timeout");
+        }
     }
 
     public int getNetworkTimeout() throws SQLException {
-        // TODO
+        checkOpen();
         return 0;
     }
 
@@ -346,15 +368,14 @@ public abstract class SQLiteConnection implements Connection {
         checkOpen();
         if (connectionConfig.isAutoCommit() == ac) return;
 
-        connectionConfig.setAutoCommit(ac);
-        // db.exec(connectionConfig.isAutoCommit() ? "commit;" : this.transactionPrefix(), ac);
-
-        if (this.getConnectionConfig().isAutoCommit()) {
-            db.exec("commit;", ac);
-            this.currentTransactionMode = null;
+        if (ac) {
+            db.exec("commit;", true);
+            connectionConfig.setAutoCommit(true);
+            currentTransactionMode = null;
         } else {
-            db.exec(this.transactionPrefix(), ac);
-            this.currentTransactionMode = this.getConnectionConfig().getTransactionMode();
+            db.exec(transactionPrefix(), false);
+            connectionConfig.setAutoCommit(false);
+            currentTransactionMode = connectionConfig.getTransactionMode();
         }
     }
 

@@ -41,36 +41,34 @@ public class ConnectionImpl extends BaseConnection {
         return super.isClosed();
     }
 
-    public <T> T unwrap(Class<T> iface) throws ClassCastException {
-        // caller should invoke isWrapperFor prior to unwrap
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());
         return iface.cast(this);
     }
 
-    public boolean isWrapperFor(Class<?> iface) {
+    public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        if (iface == null) throw new SQLException("interface must not be null");
         return iface.isInstance(this);
     }
 
     public Clob createClob() throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        throw unsupported("CLOB");
     }
 
     public Blob createBlob() throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        throw unsupported("BLOB");
     }
 
     public NClob createNClob() throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        throw unsupported("NCLOB");
     }
 
     public SQLXML createSQLXML() throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        throw unsupported("SQLXML");
     }
 
     public boolean isValid(int timeout) throws SQLException {
+        if (timeout < 0) throw new SQLException("timeout must be >= 0");
         if (isClosed()) {
             return false;
         }
@@ -83,27 +81,36 @@ public class ConnectionImpl extends BaseConnection {
     }
 
     public void setClientInfo(String name, String value) throws SQLClientInfoException {
-        // TODO Auto-generated method stub
-
+        requireOpenForClientInfo();
     }
 
     public void setClientInfo(Properties properties) throws SQLClientInfoException {
-        // TODO Auto-generated method stub
-
+        requireOpenForClientInfo();
     }
 
     public String getClientInfo(String name) throws SQLException {
-        // TODO Auto-generated method stub
+        checkOpen();
         return null;
     }
 
     public Properties getClientInfo() throws SQLException {
-        // TODO Auto-generated method stub
-        return null;
+        checkOpen();
+        return new Properties();
     }
 
     public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
-        // TODO Auto-generated method stub
-        return null;
+        throw unsupported("SQL ARRAY");
+    }
+
+    private void requireOpenForClientInfo() throws SQLClientInfoException {
+        try {
+            checkOpen();
+        } catch (SQLException error) {
+            throw new SQLClientInfoException(error.getMessage(), null, error);
+        }
+    }
+
+    private static SQLFeatureNotSupportedException unsupported(String type) {
+        return new SQLFeatureNotSupportedException(type + " is not supported by SQLite");
     }
 }

@@ -160,15 +160,48 @@ public class SQLiteConnectionPoolDataSourceTest {
     }
 
     @Test
+    public void abortNotifiesPoolThatPhysicalConnectionIsInvalid() throws SQLException {
+        ConnectionPoolDataSource ds = new SQLiteConnectionPoolDataSource();
+        PooledConnection pooled = ds.getPooledConnection();
+        AtomicInteger errorEvents = new AtomicInteger();
+        pooled.addConnectionEventListener(
+                new ConnectionEventListener() {
+                    @Override
+                    public void connectionClosed(ConnectionEvent event) {}
+
+                    @Override
+                    public void connectionErrorOccurred(ConnectionEvent event) {
+                        errorEvents.incrementAndGet();
+                    }
+                });
+        try {
+            Connection handle = pooled.getConnection();
+            handle.abort(Runnable::run);
+            assertThat(handle.isClosed()).isTrue();
+            assertThat(errorEvents).hasValue(1);
+            assertThatThrownBy(pooled::getConnection).isInstanceOf(SQLException.class);
+        } finally {
+            pooled.close();
+        }
+    }
+
+    @Test
     public void statementsAndMetadataDoNotExposeThePhysicalConnection() throws SQLException {
         ConnectionPoolDataSource ds = new SQLiteConnectionPoolDataSource();
         PooledConnection pooled = ds.getPooledConnection();
         try {
             Connection handle = pooled.getConnection();
+            assertThat(handle.unwrap(Connection.class)).isSameAs(handle);
             try (Statement statement = handle.createStatement()) {
                 assertThat(statement.getConnection()).isSameAs(handle);
+                assertThat(statement.unwrap(Statement.class)).isSameAs(statement);
+                assertThat(statement.unwrap(Statement.class).getConnection()).isSameAs(handle);
             }
-            assertThat(handle.getMetaData().getConnection()).isSameAs(handle);
+            var metadata = handle.getMetaData();
+            assertThat(metadata.getConnection()).isSameAs(handle);
+            assertThat(metadata.unwrap(java.sql.DatabaseMetaData.class)).isSameAs(metadata);
+            assertThat(metadata.unwrap(java.sql.DatabaseMetaData.class).getConnection())
+                    .isSameAs(handle);
 
             handle.createStatement().getConnection().close();
             assertThat(handle.isClosed()).isTrue();

@@ -88,7 +88,7 @@ public abstract class CoreResultSet implements Codes {
      * @throws SQLException if ResultSet is not open.
      */
     protected void checkOpen() throws SQLException {
-        if (!open) {
+        if (!open || stmt.conn.isClosed()) {
             throw new SQLException("ResultSet closed");
         }
     }

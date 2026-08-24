@@ -2,6 +2,7 @@ package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -39,6 +40,54 @@ class ResultSetTest {
     public void close() throws SQLException {
         stat.close();
         conn.close();
+    }
+
+    @Test
+    void wrapperAndHoldabilityContracts() throws SQLException {
+        try (ResultSet resultSet = stat.executeQuery("select * from test")) {
+            assertThat(resultSet.getHoldability()).isEqualTo(ResultSet.CLOSE_CURSORS_AT_COMMIT);
+            assertThat(resultSet.isWrapperFor(ResultSet.class)).isTrue();
+            assertThat(resultSet.unwrap(ResultSet.class)).isSameAs(resultSet);
+            assertThatThrownBy(() -> resultSet.unwrap(String.class))
+                    .isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> resultSet.isWrapperFor(null)).isInstanceOf(SQLException.class);
+        }
+
+        assertThat(stat.isWrapperFor(Statement.class)).isTrue();
+        assertThat(stat.unwrap(Statement.class)).isSameAs(stat);
+        assertThatThrownBy(() -> stat.unwrap(String.class)).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> stat.isWrapperFor(null)).isInstanceOf(SQLException.class);
+
+        var metadata = conn.getMetaData();
+        assertThat(metadata.isWrapperFor(java.sql.DatabaseMetaData.class)).isTrue();
+        assertThat(metadata.unwrap(java.sql.DatabaseMetaData.class)).isSameAs(metadata);
+        assertThatThrownBy(() -> metadata.unwrap(String.class)).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> metadata.isWrapperFor(null)).isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void nationalCharacterMethodsUseSQLiteText() throws SQLException {
+        try (PreparedStatement insert =
+                conn.prepareStatement("insert into test values (2, ?, 'n')")) {
+            insert.setNString(1, "Unicode \u6587\u672c");
+            assertThat(insert.executeUpdate()).isEqualTo(1);
+        }
+
+        try (ResultSet resultSet = stat.executeQuery("select DESCRIPTION from test where id = 2")) {
+            assertThat(resultSet.next()).isTrue();
+            assertThat(resultSet.getNString(1)).isEqualTo("Unicode \u6587\u672c");
+            assertThat(resultSet.getNString("DESCRIPTION")).isEqualTo("Unicode \u6587\u672c");
+        }
+    }
+
+    @Test
+    void closingConnectionClosesStatementsAndResultSets() throws SQLException {
+        ResultSet resultSet = stat.executeQuery("select * from test");
+        conn.close();
+
+        assertThat(stat.isClosed()).isTrue();
+        assertThat(resultSet.isClosed()).isTrue();
+        assertThatThrownBy(resultSet::next).isInstanceOf(SQLException.class);
     }
 
     @Test

@@ -10,11 +10,13 @@ public class StatementImpl extends BaseStatement implements Statement {
     }
 
     // JDBC 4
-    public <T> T unwrap(Class<T> iface) throws ClassCastException {
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());
         return iface.cast(this);
     }
 
-    public boolean isWrapperFor(Class<?> iface) {
+    public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        if (iface == null) throw new SQLException("interface must not be null");
         return iface.isInstance(this);
     }
 
@@ -22,12 +24,15 @@ public class StatementImpl extends BaseStatement implements Statement {
 
     @Override
     public void close() throws SQLException {
-        super.close();
-        closed = true; // isClosed() should only return true when close() happened
+        try {
+            super.close();
+        } finally {
+            closed = true;
+        }
     }
 
-    public boolean isClosed() {
-        return closed;
+    public boolean isClosed() throws SQLException {
+        return closed || conn.isClosed();
     }
 
     boolean closeOnCompletion;
@@ -42,13 +47,9 @@ public class StatementImpl extends BaseStatement implements Statement {
         return closeOnCompletion;
     }
 
-    public void setPoolable(boolean poolable) throws SQLException {
-        // TODO Auto-generated method stub
-
-    }
+    public void setPoolable(boolean poolable) throws SQLException {}
 
     public boolean isPoolable() throws SQLException {
-        // TODO Auto-generated method stub
         return false;
     }
 }

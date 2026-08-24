@@ -10,6 +10,7 @@
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.ByteOrder;
 import java.sql.Connection;
@@ -27,6 +28,15 @@ public class SQLiteDataSourceTest {
 
     @AfterEach
     public void tearDown() {}
+
+    @Test
+    public void wrapperContract() throws SQLException {
+        SQLiteDataSource dataSource = new SQLiteDataSource();
+        assertThat(dataSource.isWrapperFor(SQLiteDataSource.class)).isTrue();
+        assertThat(dataSource.unwrap(SQLiteDataSource.class)).isSameAs(dataSource);
+        assertThatThrownBy(() -> dataSource.unwrap(String.class)).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> dataSource.isWrapperFor(null)).isInstanceOf(SQLException.class);
+    }
 
     @Test
     public void enumParam() throws Exception {

@@ -1,6 +1,7 @@
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.File;
 import java.sql.Connection;
@@ -48,11 +49,43 @@ public class SavepointTest {
     }
 
     @Test
+    public void savepointNamesAreQuotedAndOwnershipIsChecked() throws SQLException {
+        stat1.executeUpdate("create table trans (c1)");
+        assertThatThrownBy(conn1::setSavepoint).isInstanceOf(SQLException.class);
+        conn1.setAutoCommit(false);
+
+        Savepoint unnamed = conn1.setSavepoint();
+        assertThat(unnamed.getSavepointId()).isPositive();
+        assertThatThrownBy(unnamed::getSavepointName).isInstanceOf(SQLException.class);
+        conn1.releaseSavepoint(unnamed);
+
+        String name = "quoted\"; create table injected(value); --";
+        Savepoint named = conn1.setSavepoint(name);
+        assertThat(named.getSavepointName()).isEqualTo(name);
+        assertThatThrownBy(named::getSavepointId).isInstanceOf(SQLException.class);
+        Savepoint inner = conn1.setSavepoint("inner");
+        stat1.executeUpdate("insert into trans values (1)");
+        conn1.rollback(named);
+        assertThatThrownBy(() -> conn1.releaseSavepoint(inner)).isInstanceOf(SQLException.class);
+        conn1.releaseSavepoint(named);
+        assertThatThrownBy(() -> conn1.rollback(named)).isInstanceOf(SQLException.class);
+
+        assertThatThrownBy(() -> conn2.rollback(named)).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> conn1.setSavepoint(null)).isInstanceOf(SQLException.class);
+        try (ResultSet result =
+                stat1.executeQuery("select count(*) from sqlite_schema where name = 'injected'")) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getInt(1)).isZero();
+        }
+    }
+
+    @Test
     public void insert() throws SQLException {
         ResultSet rs;
         String countSql = "select count(*) from trans;";
 
         stat1.executeUpdate("create table trans (c1);");
+        conn1.setAutoCommit(false);
         conn1.setSavepoint();
 
         assertThat(stat1.executeUpdate("insert into trans values (4);")).isEqualTo(1);
@@ -82,6 +115,7 @@ public class SavepointTest {
         ResultSet rs;
 
         stat1.executeUpdate("create table trans (c1);");
+        conn1.setAutoCommit(false);
         Savepoint sp = conn1.setSavepoint();
         stat1.executeUpdate("insert into trans values (3);");
 
@@ -101,6 +135,7 @@ public class SavepointTest {
         ResultSet rs;
 
         stat1.executeUpdate("create table t (c1);");
+        conn1.setAutoCommit(false);
         conn1.setSavepoint();
         stat1.executeUpdate("insert into t values (1);");
         conn1.commit();
@@ -155,6 +190,7 @@ public class SavepointTest {
         String countSql = "select count(*) from trans;";
 
         stat1.executeUpdate("create table trans (c1);");
+        conn1.setAutoCommit(false);
 
         Savepoint outerSP = conn1.setSavepoint("outer_sp");
         assertThat(stat1.executeUpdate("insert into trans values (4);")).isEqualTo(1);
@@ -190,10 +226,11 @@ public class SavepointTest {
         assertThat(rs.getInt(1)).isEqualTo(0);
         rs.close();
 
-        // releasing the outer savepoint is like a commit
+        // Releasing a savepoint does not commit the surrounding JDBC transaction.
         conn1.releaseSavepoint(outerSP);
+        conn1.commit();
 
-        // all connects can see SP1 data
+        // all connections can see the committed data
         rs = stat2.executeQuery(countSql);
         assertThat(rs.next()).isTrue();
         assertThat(rs.getInt(1)).isEqualTo(2);

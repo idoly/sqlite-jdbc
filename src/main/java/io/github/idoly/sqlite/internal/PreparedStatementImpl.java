@@ -34,19 +34,20 @@ public class PreparedStatementImpl extends BasePreparedStatement
     }
 
     public void setNString(int parameterIndex, String value) throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        setString(parameterIndex, value);
     }
 
     public void setNCharacterStream(int parameterIndex, Reader value, long length)
             throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        setCharacterStream(parameterIndex, value, length);
     }
 
     public void setNClob(int parameterIndex, NClob value) throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        if (value == null) {
+            setString(parameterIndex, null);
+        } else {
+            setNCharacterStream(parameterIndex, value.getCharacterStream(), value.length());
+        }
     }
 
     public void setClob(int parameterIndex, Reader reader, long length) throws SQLException {
@@ -68,8 +69,7 @@ public class PreparedStatementImpl extends BasePreparedStatement
     }
 
     public void setNClob(int parameterIndex, Reader reader, long length) throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        setNCharacterStream(parameterIndex, reader, length);
     }
 
     public void setSQLXML(int parameterIndex, SQLXML xmlObject) throws SQLException {
@@ -134,8 +134,7 @@ public class PreparedStatementImpl extends BasePreparedStatement
     }
 
     public void setNCharacterStream(int parameterIndex, Reader value) throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        setCharacterStream(parameterIndex, value);
     }
 
     public void setClob(int parameterIndex, Reader reader) throws SQLException {
@@ -147,7 +146,6 @@ public class PreparedStatementImpl extends BasePreparedStatement
     }
 
     public void setNClob(int parameterIndex, Reader reader) throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        setNCharacterStream(parameterIndex, reader);
     }
 }

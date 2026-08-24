@@ -41,6 +41,55 @@ public class ConnectionTest {
     }
 
     @Test
+    public void jdbc43ConnectionContracts() throws SQLException {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:")) {
+            assertThatThrownBy(() -> conn.isValid(-1)).isInstanceOf(SQLException.class);
+            assertThat(conn.getClientInfo()).isEmpty();
+            assertThat(conn.getClientInfo("unsupported")).isNull();
+            assertThatThrownBy(() -> conn.createArrayOf("text", new Object[0]))
+                    .isInstanceOf(SQLFeatureNotSupportedException.class);
+
+            assertThat(conn.getSchema()).isNull();
+            assertThatThrownBy(() -> conn.setSchema("main"))
+                    .isInstanceOf(SQLFeatureNotSupportedException.class);
+            assertThat(conn.getNetworkTimeout()).isZero();
+            conn.setNetworkTimeout(Runnable::run, 0);
+            assertThatThrownBy(() -> conn.setNetworkTimeout(Runnable::run, 1))
+                    .isInstanceOf(SQLFeatureNotSupportedException.class);
+
+            assertThat(conn.isWrapperFor(Connection.class)).isTrue();
+            assertThat(conn.unwrap(Connection.class)).isSameAs(conn);
+            assertThatThrownBy(() -> conn.unwrap(String.class)).isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> conn.isWrapperFor(null)).isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    public void failedCommitDoesNotChangeAutoCommitState() throws SQLException {
+        Properties properties = new Properties();
+        properties.setProperty("foreign_keys", "true");
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:", properties);
+                Statement statement = conn.createStatement()) {
+            statement.execute("create table parent(id primary key)");
+            statement.execute(
+                    "create table child(parent_id references parent(id) deferrable initially deferred)");
+            conn.setAutoCommit(false);
+            statement.executeUpdate("insert into child values (1)");
+
+            assertThatThrownBy(() -> conn.setAutoCommit(true)).isInstanceOf(SQLException.class);
+            assertThat(conn.getAutoCommit()).isFalse();
+            conn.rollback();
+        }
+    }
+
+    @Test
+    public void abortClosesConnectionThroughExecutor() throws SQLException {
+        Connection conn = DriverManager.getConnection("jdbc:sqlite:");
+        conn.abort(Runnable::run);
+        assertThat(conn.isClosed()).isTrue();
+    }
+
+    @Test
     public void executeUpdateOnClosedDB() throws SQLException {
         Connection conn = DriverManager.getConnection("jdbc:sqlite:");
         Statement stat = conn.createStatement();

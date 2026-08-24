@@ -50,11 +50,13 @@ public class ResultSetImpl extends BaseResultSet implements ResultSet, ResultSet
     }
 
     // JDBC 4
-    public <T> T unwrap(Class<T> iface) throws ClassCastException {
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());
         return iface.cast(this);
     }
 
-    public boolean isWrapperFor(Class<?> iface) {
+    public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        if (iface == null) throw new SQLException("interface must not be null");
         return iface.isInstance(this);
     }
 
@@ -79,12 +81,11 @@ public class ResultSetImpl extends BaseResultSet implements ResultSet, ResultSet
     }
 
     public int getHoldability() throws SQLException {
-        // TODO Auto-generated method stub
-        return 0;
+        return ResultSet.CLOSE_CURSORS_AT_COMMIT;
     }
 
     public boolean isClosed() throws SQLException {
-        return !isOpen();
+        return !isOpen() || stmt.conn.isClosed();
     }
 
     public void updateNString(int columnIndex, String nString) throws SQLException {
@@ -138,13 +139,11 @@ public class ResultSetImpl extends BaseResultSet implements ResultSet, ResultSet
     }
 
     public String getNString(int columnIndex) throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        return getString(columnIndex);
     }
 
     public String getNString(String columnLabel) throws SQLException {
-        // TODO Support this
-        throw new SQLFeatureNotSupportedException();
+        return getString(columnLabel);
     }
 
     public Reader getNCharacterStream(int col) throws SQLException {

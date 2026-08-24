@@ -431,6 +431,7 @@ public class SQLiteDataSource implements DataSource {
      * @throws SQLException
      */
     public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        if (iface == null) throw new SQLException("interface must not be null");
         return iface.isInstance(this);
     }
 
@@ -441,8 +442,8 @@ public class SQLiteDataSource implements DataSource {
      * @return The casted class.
      * @throws SQLException
      */
-    @SuppressWarnings("unchecked")
     public <T> T unwrap(Class<T> iface) throws SQLException {
-        return (T) this;
+        if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());
+        return iface.cast(this);
     }
 }
