@@ -1,14 +1,6 @@
 = SQLite JDBC FFM
-:version: 3.53.2.2-SNAPSHOT
 
-JDK 25+ 的 SQLite JDBC 4.3 驱动，使用 `java.lang.foreign` 直接调用 SQLite `sqlite3_*` C API，不使用 JNI。
-
-* Maven：`io.github.idoly:sqlite-jdbc`
-* Java 包：`io.github.idoly.sqlite`
-* JPMS 模块：`io.github.idoly.sqlitejdbc`
-* JDBC URL：`jdbc:sqlite:`
-
-模块只导出 `io.github.idoly.sqlite` 和 `io.github.idoly.sqlite.javax`。
+JDK 25+ 的 SQLite JDBC 4.3 驱动，使用 FFM 直接调用 SQLite，不使用 JNI。坐标：`io.github.idoly:sqlite-jdbc`。
 
 == 构建
 
@@ -16,8 +8,6 @@ JDK 25+ 的 SQLite JDBC 4.3 驱动，使用 `java.lang.foreign` 直接调用 SQL
 ----
 mvn clean package
 ----
-
-项目只生成 `target/sqlite-jdbc-{version}.jar`。
 
 == 使用
 
@@ -27,52 +17,12 @@ import java.sql.DriverManager;
 
 try (var connection = DriverManager.getConnection("jdbc:sqlite:sample.db");
      var statement = connection.createStatement()) {
-    statement.executeUpdate("create table if not exists item(id integer primary key, value text)");
+    statement.executeUpdate("create table item(id integer primary key, value text)");
 }
 ----
 
-类路径运行：
-
-[source,shell]
-----
-java --enable-native-access=ALL-UNNAMED \
-  -cp "sqlite-jdbc-{version}.jar:app.jar" com.example.Main
-----
-
-模块路径运行时，将 native access 目标改为 `io.github.idoly.sqlitejdbc`。
-
-== SQLite 库
-
-驱动优先加载 JAR 内 `io/github/idoly/sqlite/native/<OS>/<架构>/` 的平台库，否则加载系统库：
-
-* Linux：`libsqlite3.so.0`
-* macOS：`libsqlite3.dylib`
-* Windows：`sqlite3`
-
-项目没有自定义动态库路径参数。构建当前平台库：
-
-[source,shell]
-----
-make native
-mvn package
-----
-
-== 功能
-
-支持标准 JDBC、数据源和连接池，以及 Function、Collation、BusyHandler、ProgressHandler、事务 hook、backup/restore 和 serialize/deserialize。SQL 与扩展能力由实际加载的 SQLite 库决定。
-
-== 测试
-
-[source,shell]
-----
-mvn test
-mvn -Pnative integration-test
-----
-
-native-image 测试需要 GraalVM JDK 25。
+运行时需要 `--enable-native-access=ALL-UNNAMED`。
 
 == 许可
 
-JDBC Java 层源自 https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc]，不兼容其 `org.sqlite` 包。
-
-Java 代码使用 Apache License 2.0。SQLite 为 public domain。其他归属见 link:LICENSE.zentus[LICENSE.zentus] 和 link:NOTICE[NOTICE]。
+Java 代码使用 Apache License 2.0，SQLite 为 public domain。上游归属见 link:NOTICE[NOTICE] 和 link:LICENSE.zentus[LICENSE.zentus]。
