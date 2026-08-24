@@ -3,8 +3,8 @@ package io.github.idoly.sqlite;
 import static org.assertj.core.api.Assertions.*;
 import static org.assertj.core.data.Offset.offset;
 
-import io.github.idoly.sqlite.internal.JDBC3Statement;
-import io.github.idoly.sqlite.jdbc4.JDBC4Statement;
+import io.github.idoly.sqlite.internal.BaseStatement;
+import io.github.idoly.sqlite.internal.StatementImpl;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.sql.BatchUpdateException;
@@ -652,7 +652,7 @@ public class StatementTest {
 
         assertThat(stat.isWrapperFor(Statement.class)).isTrue();
         assertThat(stat.unwrap(Statement.class)).isEqualTo(stat);
-        assertThat(stat.unwrap(JDBC3Statement.class)).isEqualTo(stat);
+        assertThat(stat.unwrap(BaseStatement.class)).isEqualTo(stat);
 
         ResultSet rs = stat.executeQuery("select 1");
 
@@ -664,13 +664,13 @@ public class StatementTest {
 
     @Test
     public void closeOnCompletionTest() throws Exception {
-        if (!(stat instanceof JDBC4Statement)) {
+        if (!(stat instanceof StatementImpl)) {
             return;
         }
 
         // Run the following code only for JDK7 or higher
-        Method mIsCloseOnCompletion = JDBC4Statement.class.getDeclaredMethod("isCloseOnCompletion");
-        Method mCloseOnCompletion = JDBC4Statement.class.getDeclaredMethod("closeOnCompletion");
+        Method mIsCloseOnCompletion = StatementImpl.class.getDeclaredMethod("isCloseOnCompletion");
+        Method mCloseOnCompletion = StatementImpl.class.getDeclaredMethod("closeOnCompletion");
         assertThat((Boolean) mIsCloseOnCompletion.invoke(stat)).isFalse();
 
         mCloseOnCompletion.invoke(stat);

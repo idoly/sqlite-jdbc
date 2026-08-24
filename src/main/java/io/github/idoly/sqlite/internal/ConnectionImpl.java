@@ -1,6 +1,5 @@
-package io.github.idoly.sqlite.jdbc4;
+package io.github.idoly.sqlite.internal;
 
-import io.github.idoly.sqlite.internal.JDBC3Connection;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -13,9 +12,9 @@ import java.sql.SQLXML;
 import java.sql.Statement;
 import java.util.Properties;
 
-public class JDBC4Connection extends JDBC3Connection {
+public class ConnectionImpl extends BaseConnection {
 
-    public JDBC4Connection(String url, String fileName, Properties prop) throws SQLException {
+    public ConnectionImpl(String url, String fileName, Properties prop) throws SQLException {
         super(url, fileName, prop);
     }
 
@@ -23,7 +22,7 @@ public class JDBC4Connection extends JDBC3Connection {
         checkOpen();
         checkCursor(rst, rsc, rsh);
 
-        return new JDBC4Statement(this);
+        return new StatementImpl(this);
     }
 
     public PreparedStatement prepareStatement(String sql, int rst, int rsc, int rsh)
@@ -31,7 +30,7 @@ public class JDBC4Connection extends JDBC3Connection {
         checkOpen();
         checkCursor(rst, rsc, rsh);
 
-        return new JDBC4PreparedStatement(this, sql);
+        return new PreparedStatementImpl(this, sql);
     }
 
     // JDBC 4

@@ -1,117 +1,69 @@
-= SQLite JDBC JDK 25 FFM 版
+= SQLite JDBC FFM
 :project-version: 3.53.2.2-SNAPSHOT
 
-image:https://img.shields.io/github/actions/workflow/status/idoly/sqlite-jdbc/ci.yml?branch=main[构建状态,link=https://github.com/idoly/sqlite-jdbc/actions/workflows/ci.yml]
-image:https://img.shields.io/badge/JDK-25+-blue[JDK 25+]
-image:https://img.shields.io/badge/backend-FFM-green[FFM]
+基于 JDK 25 `java.lang.foreign` 的 SQLite JDBC 4.3 驱动。Java 层继承自 https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc]，本地调用已改为直接访问 SQLite `sqlite3_*` C ABI，不包含 JNI 桥。
 
-本项目基于 https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc] 的 JDBC 层，将底层 JNI 桥迁移为 JDK 25 标准的 Foreign Function and Memory API（FFM）。项目直接调用 SQLite 公开的 `sqlite3_*` C ABI，不包含 JNI Java 桥。
+== 范围
 
-== 与 xerial/sqlite-jdbc 的区别
-
-[cols="1,2,2"]
+[cols="1,1"]
 |===
-|项目 |本项目 |xerial 官方项目
+|项目 |本实现
 
-|仓库
-|https://github.com/idoly/sqlite-jdbc[idoly/sqlite-jdbc]
-|https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc]
+|JDK
+|25+
 
-|最低 Java 版本
-|JDK 25
-|由上游当前版本决定，通常兼容更早的 Java
+|JDBC
+|4.3
 
-|本地调用方式
-|标准 `java.lang.foreign` FFM
-|JNI `NativeDB.c`
-
-|本地库 ABI
-|直接导出并调用 `sqlite3_*`
-|导出 Java JNI 入口
-
-|Java 后端
-|仅 FFM，不提供 JNI 或纯 Java兼容后端
-|JNI 后端
-
-|Android
-|不支持，Android 运行时没有 JDK 25 FFM
-|上游提供 Android JNI 资源
-
-|模块结构
-|单 Maven 模块
-|单 Maven 模块
-
-|Java 包名
+|Java 包
 |`io.github.idoly.sqlite`
-|`org.sqlite`
 
 |Maven 坐标
 |`io.github.idoly:sqlite-jdbc`
-|`org.xerial:sqlite-jdbc`
 
-|JDBC/API
-|仅支持 JDK 25 `java.sql` / JDBC 4.3；API 已迁移到新包名
-|上游 `org.sqlite` API 及其历史兼容范围
+|模块名
+|`io.github.idoly.sqlitejdbc`
 
-|GraalVM native-image
-|使用 FFM reachability metadata 和 shared Arena
-|使用上游 JNI 配置
+|JDBC URL
+|`jdbc:sqlite:`
 
-|发布状态
-|当前从本仓库源码构建
-|官方版本发布到 Maven Central
+|本地接口
+|JDK FFM
 |===
 
-IMPORTANT: xerial 官方产物坐标是 `org.xerial:sqlite-jdbc`，不包含本仓库的 FFM 修改。本项目坐标是 `io.github.idoly:sqlite-jdbc`，Java 包名是 `io.github.idoly.sqlite`，不能与 xerial JAR 混用，也不保证 `org.sqlite` 源码或二进制兼容。当前应从本仓库源码构建，或使用本仓库后续发布的明确版本。
-
-== 要求
-
-* JDK 25 或更高版本
-* Maven 3.9 或更高版本
-* 可用的 SQLite 动态库：本项目构建的纯 SQLite 库、系统 SQLite，或通过属性指定的库
-* 启动 JVM 时授予 native access
-
-类路径运行：
-
-[source,shell]
-----
-java --enable-native-access=ALL-UNNAMED -cp "sqlite-jdbc.jar:slf4j-api.jar:." your.Main
-----
-
-模块路径运行：
-
-[source,shell]
-----
-java --enable-native-access=io.github.idoly.sqlitejdbc \
-  --module-path sqlite-jdbc.jar:slf4j-api.jar \
-  --module your.module/your.Main
-----
+本项目不兼容 xerial 的 `org.sqlite` API、旧 JDK、Android、JNI、本地 JNI 库或旧加载参数。`org.xerial:sqlite-jdbc` 与本项目不能混用。
 
 == 构建
 
+需要 JDK 25 和 Maven 3.9+：
+
 [source,shell]
 ----
-git clone https://github.com/idoly/sqlite-jdbc.git
-cd sqlite-jdbc
-mvn --batch-mode --no-transfer-progress clean package
+mvn clean package
 ----
 
-主要产物：
+构建只生成一个主产物：
 
 [source,text]
 ----
-target/sqlite-jdbc-3.53.2.2-SNAPSHOT.jar
-target/sqlite-jdbc-3.53.2.2-SNAPSHOT-without-natives.jar
+target/sqlite-jdbc-{project-version}.jar
 ----
 
-安装到本地 Maven 仓库：
+完整 JVM 测试：
 
 [source,shell]
 ----
-mvn install
+mvn test
 ----
 
-== 快速使用
+GraalVM native-image 测试：
+
+[source,shell]
+----
+mvn -Pnative integration-test
+----
+
+== 使用
 
 [source,java]
 ----
@@ -120,85 +72,65 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 
-public class Sample {
-    public static void main(String[] args) throws Exception {
-        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:sample.db");
-                Statement statement = connection.createStatement()) {
-            statement.executeUpdate("create table if not exists person(id integer, name text)");
-            statement.executeUpdate("insert into person values(1, 'Alice')");
-            try (ResultSet result = statement.executeQuery("select id, name from person")) {
-                while (result.next()) {
-                    System.out.println(result.getInt(1) + ": " + result.getString(2));
-                }
-            }
-        }
+try (Connection connection = DriverManager.getConnection("jdbc:sqlite:sample.db");
+     Statement statement = connection.createStatement()) {
+    statement.executeUpdate("create table if not exists app_data(id integer primary key, value text)");
+    try (ResultSet rows = statement.executeQuery("select sqlite_version()")) {
+        rows.next();
+        System.out.println(rows.getString(1));
     }
 }
 ----
 
-== SQLite 动态库选择
+类路径运行时允许 unnamed module 访问本地代码：
 
-按以下顺序选择 SQLite：
+[source,shell]
+----
+java --enable-native-access=ALL-UNNAMED -cp "sqlite-jdbc-{project-version}.jar:app.jar" com.example.Main
+----
 
-. `io.github.idoly.sqlite.ffm.lib.path` 指定的完整文件路径；
-. JAR 中与当前平台匹配、且导出 `sqlite3_*` 的资源；
-. 系统动态库：Linux 为 `libsqlite3.so.0`，macOS 为 `libsqlite3.dylib`，Windows 为 `sqlite3`。
+模块路径运行时使用模块名：
 
-指定自定义库：
+[source,shell]
+----
+java --enable-native-access=io.github.idoly.sqlitejdbc --module-path sqlite-jdbc-{project-version}.jar:app.jar --module com.example/com.example.Main
+----
+
+== SQLite 动态库
+
+加载顺序：
+
+. `io.github.idoly.sqlite.ffm.lib.path` 指定的绝对路径；
+. JAR 中 `io/github/idoly/sqlite/native/<OS>/<架构>/` 的库；
+. 系统 SQLite 动态库。
 
 [source,shell]
 ----
 java --enable-native-access=ALL-UNNAMED \
-  -Dio.github.idoly.sqlite.ffm.lib.path=/absolute/path/to/libsqlite3.so \
-  -cp "sqlite-jdbc.jar:slf4j-api.jar:." your.Main
+  -Dio.github.idoly.sqlite.ffm.lib.path=/opt/sqlite/lib/libsqlite3.so \
+  -cp "sqlite-jdbc-{project-version}.jar:app.jar" com.example.Main
 ----
 
-自定义库必须与当前进程架构一致，并导出驱动使用的 SQLite 公开 API。旧 xerial JNI `libsqlitejdbc` 二进制不能用于本项目。
+自定义库必须匹配进程架构并导出驱动使用的 `sqlite3_*` API。Linux 默认查找 `libsqlite3.so.0`，macOS 查找 `libsqlite3.dylib`，Windows 查找 `sqlite3`。
 
-== JDBC 与 SQL 支持范围
+仓库原生库构建：
 
-本项目只支持 JDK 25+ 提供的 `java.sql` API，JDBC 规范版本为 JDBC 4.3。JDBC 没有独立的网络线协议，也没有 JDK 25 对应的 JDBC 5；驱动与进程内 SQLite 通过 C ABI 通信。
+[source,shell]
+----
+make native
+make native-all
+----
 
-源码中的 `io.github.idoly.sqlite.internal` 是从 xerial 继承的历史类名和实现分层，不表示支持 JDBC 3。用户只应依赖标准 `java.sql`、`javax.sql`、`io.github.idoly.sqlite` 和 `io.github.idoly.sqlite.jdbc4` API；直接使用 `io.github.idoly.sqlite.internal` 不属于本项目承诺的兼容范围。后续可在不影响 JDBC 4.3 行为的独立重构中移除这层遗留。
+== 能力
 
-SQL 语法由实际加载的 SQLite 动态库决定。本仓库构建基线为 SQLite 3.53.2；使用外部库时，以该库支持的 SQLite SQL、PRAGMA 和扩展能力为准。
+支持连接、事务、Statement、PreparedStatement、ResultSet、元数据、连接池、backup/restore、serialize/deserialize、Function、Collation、BusyHandler、ProgressHandler 和更新/提交/回滚 hook。SQLite SQL 与 PRAGMA 能力由实际加载的 SQLite 版本决定。
 
-== 已迁移能力
+FFM callback 与连接共享 Arena；关闭连接时先注销 callback，再关闭 SQLite 连接和 Arena。应用不得在连接关闭后调用 SQLite 提供的 callback 地址。
 
-* Connection、Statement、PreparedStatement 和 ResultSet
-* 参数绑定、BLOB、列元数据和错误码映射
-* 事务、busy timeout、interrupt 和 SQLite limits
-* Online Backup / Restore
-* Serialize / Deserialize
-* Scalar、Aggregate 和 Window Function
-* Collation
-* BusyHandler 和 ProgressHandler
-* commit、rollback 和 update hooks
-* 多 classloader
-* GraalVM native-image
+== 安全
 
-FFM callback 使用连接级 shared `Arena` 和强引用注册表管理。关闭连接时先注销 SQLite callback，再关闭数据库和 Arena。
+安全问题请通过 GitHub Security Advisory 私下报告。只加载可信 SQLite 动态库；本项目不验证外部库的签名或来源。
 
-== 平台说明
+== 许可
 
-本项目的 Java 层要求目标平台存在可运行 JDK 25 FFM 的 JVM。Android 不满足该条件，因此不支持 Android。
-
-仓库不保留旧 JNI 平台二进制。各平台资源由 `Build Native` GitHub Actions workflow 使用 link:Makefile[Makefile] 重新生成。生成库仅包含 SQLite amalgamation 和扩展，并直接导出 `sqlite3_*`。
-
-== 测试状态
-
-当前迁移基线：
-
-* JVM 测试：459 项，0 failure，0 error
-* GraalVM native-image：398 项通过
-* 已注册 31 种 FFM downcall descriptor 和 6 种 upcall descriptor
-
-== 文档
-
-* link:USAGE.md[使用说明]
-* link:CONTRIBUTING.md[开发与贡献]
-* link:SECURITY.md[安全策略]
-
-== 许可证与上游归属
-
-本项目继承 xerial/sqlite-jdbc 的 Apache License 2.0、Zentus 相关许可和版权声明。xerial 项目名称、历史、API 设计和大量 JDBC 实现归其原作者及贡献者所有。本仓库的 FFM 迁移不代表 xerial 官方已经采用该实现。
+Java 驱动代码使用 Apache License 2.0。SQLite 为 public domain。继承的 Zentus 代码适用 link:LICENSE.zentus[LICENSE.zentus]，完整归属见 link:NOTICE[NOTICE]。

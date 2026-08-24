@@ -1,9 +1,9 @@
-package io.github.idoly.sqlite.jdbc4;
+package io.github.idoly.sqlite.internal;
 
 import javax.sql.PooledConnection;
 import javax.sql.StatementEventListener;
 
-public abstract class JDBC4PooledConnection implements PooledConnection {
+public abstract class PooledConnectionImpl implements PooledConnection {
 
     public void addStatementEventListener(StatementEventListener listener) {
         // TODO impl

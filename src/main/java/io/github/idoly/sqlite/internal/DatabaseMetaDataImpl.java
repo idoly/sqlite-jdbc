@@ -1,14 +1,13 @@
-package io.github.idoly.sqlite.jdbc4;
+package io.github.idoly.sqlite.internal;
 
 import io.github.idoly.sqlite.SQLiteConnection;
-import io.github.idoly.sqlite.internal.JDBC3DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.RowIdLifetime;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 
-public class JDBC4DatabaseMetaData extends JDBC3DatabaseMetaData {
-    public JDBC4DatabaseMetaData(SQLiteConnection conn) {
+public class DatabaseMetaDataImpl extends BaseDatabaseMetaData {
+    public DatabaseMetaDataImpl(SQLiteConnection conn) {
         super(conn);
     }
 

@@ -18,13 +18,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public abstract class JDBC3Connection extends SQLiteConnection {
+public abstract class BaseConnection extends SQLiteConnection {
     private final AtomicInteger savePoint = new AtomicInteger(0);
     private Map<String, Class<?>> typeMap;
 
     private boolean readOnly = false;
 
-    protected JDBC3Connection(String url, String fileName, Properties prop) throws SQLException {
+    protected BaseConnection(String url, String fileName, Properties prop) throws SQLException {
         super(url, fileName, prop);
     }
 
@@ -287,7 +287,7 @@ public abstract class JDBC3Connection extends SQLiteConnection {
             // https://www.sqlite.org/lang_savepoint.html
             getConnectionConfig().setAutoCommit(false);
         }
-        Savepoint sp = new JDBC3Savepoint(savePoint.incrementAndGet());
+        Savepoint sp = new SavepointImpl(savePoint.incrementAndGet());
         getDatabase().exec(String.format("SAVEPOINT %s", sp.getSavepointName()), false);
         return sp;
     }
@@ -304,7 +304,7 @@ public abstract class JDBC3Connection extends SQLiteConnection {
             // https://www.sqlite.org/lang_savepoint.html
             getConnectionConfig().setAutoCommit(false);
         }
-        Savepoint sp = new JDBC3Savepoint(savePoint.incrementAndGet(), name);
+        Savepoint sp = new SavepointImpl(savePoint.incrementAndGet(), name);
         getDatabase().exec(String.format("SAVEPOINT %s", sp.getSavepointName()), false);
         return sp;
     }

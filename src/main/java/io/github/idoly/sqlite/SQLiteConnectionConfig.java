@@ -2,11 +2,15 @@ package io.github.idoly.sqlite;
 
 import static io.github.idoly.sqlite.SQLiteConfig.DEFAULT_DATE_STRING_FORMAT;
 
-import io.github.idoly.sqlite.date.FastDateFormat;
 import java.sql.Connection;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.EnumMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TimeZone;
 
 /** Connection local configurations */
 public class SQLiteConnectionConfig implements Cloneable {
@@ -14,7 +18,6 @@ public class SQLiteConnectionConfig implements Cloneable {
     private SQLiteConfig.DatePrecision datePrecision =
             SQLiteConfig.DatePrecision.MILLISECONDS; // Calendar.SECOND or Calendar.MILLISECOND
     private String dateStringFormat = DEFAULT_DATE_STRING_FORMAT;
-    private FastDateFormat dateFormat = FastDateFormat.getInstance(dateStringFormat);
 
     private int transactionIsolation = Connection.TRANSACTION_SERIALIZABLE;
     private SQLiteConfig.TransactionMode transactionMode = SQLiteConfig.TransactionMode.DEFERRED;
@@ -98,12 +101,36 @@ public class SQLiteConnectionConfig implements Cloneable {
     }
 
     public void setDateStringFormat(String dateStringFormat) {
+        new SimpleDateFormat(dateStringFormat, Locale.ROOT);
         this.dateStringFormat = dateStringFormat;
-        this.dateFormat = FastDateFormat.getInstance(dateStringFormat);
     }
 
-    public FastDateFormat getDateFormat() {
-        return dateFormat;
+    public Date parseDate(String value) throws ParseException {
+        return parseDate(value, TimeZone.getDefault());
+    }
+
+    public Date parseDate(String value, TimeZone timeZone) throws ParseException {
+        try {
+            return dateFormat(dateStringFormat, timeZone).parse(value);
+        } catch (ParseException e) {
+            if (dateStringFormat.endsWith(".SSS")) {
+                return dateFormat(
+                                dateStringFormat.substring(0, dateStringFormat.length() - 4),
+                                timeZone)
+                        .parse(value);
+            }
+            throw e;
+        }
+    }
+
+    public String formatDate(Date value, TimeZone timeZone) {
+        return dateFormat(dateStringFormat, timeZone).format(value);
+    }
+
+    private static SimpleDateFormat dateFormat(String pattern, TimeZone timeZone) {
+        SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.ROOT);
+        format.setTimeZone(timeZone);
+        return format;
     }
 
     public boolean isAutoCommit() {

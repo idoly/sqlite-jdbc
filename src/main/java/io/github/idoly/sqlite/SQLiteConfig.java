@@ -411,20 +411,16 @@ public class SQLiteConfig {
                 "case_sensitive_like",
                 "Installs a new application-defined LIKE function that is either case sensitive or insensitive depending on the value",
                 OnOff.Values),
-        COUNT_CHANGES("count_changes", "Deprecated", OnOff.Values),
-        DEFAULT_CACHE_SIZE("default_cache_size", "Deprecated", null),
         DEFER_FOREIGN_KEYS(
                 "defer_foreign_keys",
                 "When the defer_foreign_keys PRAGMA is on, enforcement of all foreign key constraints is delayed until the outermost transaction is committed. The defer_foreign_keys pragma defaults to OFF so that foreign key constraints are only deferred if they are created as \"DEFERRABLE INITIALLY DEFERRED\". The defer_foreign_keys pragma is automatically switched off at each COMMIT or ROLLBACK. Hence, the defer_foreign_keys pragma must be separately enabled for each transaction. This pragma is only meaningful if foreign key constraints are enabled, of course.",
                 OnOff.Values),
-        EMPTY_RESULT_CALLBACKS("empty_result_callback", "Deprecated", OnOff.Values),
         ENCODING(
                 "encoding",
                 "Set the encoding that the main database will be created with if it is created by this session",
                 toStringArray(Encoding.values())),
         FOREIGN_KEYS(
                 "foreign_keys", "Set the enforcement of foreign key constraints", OnOff.Values),
-        FULL_COLUMN_NAMES("full_column_names", "Deprecated", OnOff.Values),
         FULL_SYNC(
                 "fullsync",
                 "Whether or not the F_FULLFSYNC syncing method is used on systems that support it. Only Mac OS X supports F_FULLFSYNC.",
@@ -441,8 +437,6 @@ public class SQLiteConfig {
                 "journal_size_limit",
                 "Limit the size of rollback-journal and WAL files left in the file-system after transactions or checkpoints",
                 null),
-        LEGACY_ALTER_TABLE("legacy_alter_table", "Use legacy alter table behavior", OnOff.Values),
-        LEGACY_FILE_FORMAT("legacy_file_format", "No-op", OnOff.Values),
         LOCKING_MODE(
                 "locking_mode",
                 "Set the database connection locking-mode",
@@ -464,7 +458,6 @@ public class SQLiteConfig {
                 "secure_delete",
                 "When secure_delete is on, SQLite overwrites deleted content with zeros",
                 new String[] {"true", "false", "fast"}),
-        SHORT_COLUMN_NAMES("short_column_names", "Deprecated", OnOff.Values),
         SYNCHRONOUS(
                 "synchronous",
                 "Set the \"synchronous\" flag",
@@ -473,7 +466,6 @@ public class SQLiteConfig {
                 "temp_store",
                 "When temp_store is DEFAULT (0), the compile-time C preprocessor macro SQLITE_TEMP_STORE is used to determine where temporary tables and indices are stored. When temp_store is MEMORY (2) temporary tables and indices are kept as if they were in pure in-memory databases. When temp_store is FILE (1) temporary tables and indices are stored in a file. The temp_store_directory pragma can be used to specify the directory containing temporary files when FILE is specified. When the temp_store setting is changed, all existing temporary tables, indices, triggers, and views are immediately deleted.",
                 toStringArray(TempStore.values())),
-        TEMP_STORE_DIRECTORY("temp_store_directory", "Deprecated", null),
         USER_VERSION(
                 "user_version",
                 "Set the value of the user-version integer at offset 60 in the database header. The user-version is an integer that is available to applications to use however they want. SQLite makes no use of the user-version itself.",
@@ -683,30 +675,6 @@ public class SQLiteConfig {
     }
 
     /**
-     * @deprecated Enables or disables the count-changes flag. When enabled, INSERT, UPDATE and
-     *     DELETE statements return the number of rows they modified.
-     * @param enable True to enable; false to disable.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_count_changes">www.sqlite.org/pragma.html#pragma_count_changes</a>
-     */
-    @Deprecated
-    public void enableCountChanges(boolean enable) {
-        set(Pragma.COUNT_CHANGES, enable);
-    }
-
-    /**
-     * Sets the suggested maximum number of database disk pages that SQLite will hold in memory at
-     * once per open database file. The cache size set here persists across database connections.
-     *
-     * @param numberOfPages Cache size in number of pages.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_cache_size">www.sqlite.org/pragma.html#pragma_cache_size</a>
-     */
-    public void setDefaultCacheSize(int numberOfPages) {
-        set(Pragma.DEFAULT_CACHE_SIZE, numberOfPages);
-    }
-
-    /**
      * Defers enforcement of foreign key constraints until the outermost transaction is committed.
      *
      * @param enable True to enable; false to disable;
@@ -715,17 +683,6 @@ public class SQLiteConfig {
      */
     public void deferForeignKeys(boolean enable) {
         set(Pragma.DEFER_FOREIGN_KEYS, enable);
-    }
-
-    /**
-     * @deprecated Enables or disables the empty_result_callbacks flag.
-     * @param enable True to enable; false to disable. false.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_empty_result_callbacks">https://www.sqlite.org/pragma.html#pragma_empty_result_callbacks</a>
-     */
-    @Deprecated
-    public void enableEmptyResultCallBacks(boolean enable) {
-        set(Pragma.EMPTY_RESULT_CALLBACKS, enable);
     }
 
     /**
@@ -804,19 +761,6 @@ public class SQLiteConfig {
     }
 
     /**
-     * @deprecated Enables or disables the full_column_name flag. This flag together with the
-     *     short_column_names flag determine the way SQLite assigns names to result columns of
-     *     SELECT statements.
-     * @param enable True to enable; false to disable.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_full_column_names">www.sqlite.org/pragma.html#pragma_full_column_names</a>
-     */
-    @Deprecated
-    public void enableFullColumnNames(boolean enable) {
-        set(Pragma.FULL_COLUMN_NAMES, enable);
-    }
-
-    /**
      * Enables or disables the fullfsync flag. This flag determines whether or not the F_FULLFSYNC
      * syncing method is used on systems that support it. The default value of the fullfsync flag is
      * off. Only Mac OS X supports F_FULLFSYNC.
@@ -863,33 +807,6 @@ public class SQLiteConfig {
      */
     public void setJournalSizeLimit(int limit) {
         set(Pragma.JOURNAL_SIZE_LIMIT, limit);
-    }
-
-    /**
-     * Sets the value of the legacy_file_format flag. When this flag is enabled, new SQLite
-     * databases are created in a file format that is readable and writable by all versions of
-     * SQLite going back to 3.0.0. When the flag is off, new databases are created using the latest
-     * file format which might not be readable or writable by versions of SQLite prior to 3.3.0.
-     *
-     * @param use True to turn on legacy file format; false to turn off.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_legacy_file_format">www.sqlite.org/pragma.html#pragma_legacy_file_format</a>
-     */
-    public void useLegacyFileFormat(boolean use) {
-        set(Pragma.LEGACY_FILE_FORMAT, use);
-    }
-
-    /**
-     * Sets the value of the legacy_alter_table flag. When this flag is on, the ALTER TABLE RENAME
-     * command (for changing the name of a table) works as it did in SQLite 3.24.0 (2018-06-04) and
-     * earlier.When the flag is off, using the ALTER TABLE RENAME command will mean that all
-     * references to the table anywhere in the schema will be converted to the new name.
-     *
-     * @param flag True to turn on legacy alter table behaviour; false to turn off.
-     * @see <a href="https://www.sqlite.org/pragma.html#pragma_legacy_alter_table</a>
-     */
-    public void setLegacyAlterTable(boolean flag) {
-        set(Pragma.LEGACY_ALTER_TABLE, flag);
     }
 
     public enum LockingMode implements PragmaValue {
@@ -969,18 +886,6 @@ public class SQLiteConfig {
      */
     public void enableReverseUnorderedSelects(boolean enable) {
         set(Pragma.REVERSE_UNORDERED_SELECTS, enable);
-    }
-
-    /**
-     * Enables or disables the short_column_names flag. This flag affects the way SQLite names
-     * columns of data returned by SELECT statements.
-     *
-     * @param enable True to enable short_column_names.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_short_column_names">www.sqlite.org/pragma.html#pragma_short_column_names</a>
-     */
-    public void enableShortColumnNames(boolean enable) {
-        set(Pragma.SHORT_COLUMN_NAMES, enable);
     }
 
     public enum SynchronousMode implements PragmaValue {
@@ -1065,18 +970,6 @@ public class SQLiteConfig {
      */
     public void setTempStore(TempStore storeType) {
         setPragma(Pragma.TEMP_STORE, storeType.name());
-    }
-
-    /**
-     * Changes the value of the sqlite3_temp_directory global variable, which many operating-system
-     * interface backends use to determine where to store temporary tables and indices.
-     *
-     * @param directoryName Directory name for storing temporary tables and indices.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_temp_store_directory">www.sqlite.org/pragma.html#pragma_temp_store_directory</a>
-     */
-    public void setTempStoreDirectory(String directoryName) {
-        setPragma(Pragma.TEMP_STORE_DIRECTORY, String.format("'%s'", directoryName));
     }
 
     /**

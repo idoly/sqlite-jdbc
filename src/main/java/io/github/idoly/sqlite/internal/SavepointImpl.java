@@ -3,18 +3,18 @@ package io.github.idoly.sqlite.internal;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 
-public class JDBC3Savepoint implements Savepoint {
+public class SavepointImpl implements Savepoint {
 
     final int id;
 
     final String name;
 
-    JDBC3Savepoint(int id) {
+    SavepointImpl(int id) {
         this.id = id;
         this.name = null;
     }
 
-    JDBC3Savepoint(int id, String name) {
+    SavepointImpl(int id, String name) {
         this.id = id;
         this.name = name;
     }

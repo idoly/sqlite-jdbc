@@ -114,7 +114,7 @@ public class BackupTest {
                 createTableAndInsertRows(stmt);
             }
 
-            // check that JNI updates java with progress of the DB Backup.
+            // Check that the native backup callback reports progress.
             AtomicInteger remainingStore = new AtomicInteger(-1);
             AtomicInteger pageCountStore = new AtomicInteger(-1);
             DB.ProgressObserver progressObserver =

@@ -26,9 +26,9 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Calendar;
 
-public abstract class JDBC3PreparedStatement extends CorePreparedStatement {
+public abstract class BasePreparedStatement extends CorePreparedStatement {
 
-    protected JDBC3PreparedStatement(SQLiteConnection conn, String sql) throws SQLException {
+    protected BasePreparedStatement(SQLiteConnection conn, String sql) throws SQLException {
         super(conn, sql);
     }
 
@@ -50,8 +50,8 @@ public abstract class JDBC3PreparedStatement extends CorePreparedStatement {
         pointer.safeRunConsume(DB::reset);
         exhaustedResults = false;
 
-        if (this.conn instanceof JDBC3Connection) {
-            ((JDBC3Connection) this.conn).tryEnforceTransactionMode();
+        if (this.conn instanceof BaseConnection) {
+            ((BaseConnection) this.conn).tryEnforceTransactionMode();
         }
 
         return this.withConnectionTimeout(
@@ -60,7 +60,7 @@ public abstract class JDBC3PreparedStatement extends CorePreparedStatement {
                     try {
                         synchronized (conn) {
                             resultsWaiting =
-                                    conn.getDatabase().execute(JDBC3PreparedStatement.this, batch);
+                                    conn.getDatabase().execute(BasePreparedStatement.this, batch);
                             updateGeneratedKeys();
                             success = true;
                             updateCount = getDatabase().changes();
@@ -86,8 +86,8 @@ public abstract class JDBC3PreparedStatement extends CorePreparedStatement {
         pointer.safeRunConsume(DB::reset);
         exhaustedResults = false;
 
-        if (this.conn instanceof JDBC3Connection) {
-            ((JDBC3Connection) this.conn).tryEnforceTransactionMode();
+        if (this.conn instanceof BaseConnection) {
+            ((BaseConnection) this.conn).tryEnforceTransactionMode();
         }
 
         return this.withConnectionTimeout(
@@ -95,7 +95,7 @@ public abstract class JDBC3PreparedStatement extends CorePreparedStatement {
                     boolean success = false;
                     try {
                         resultsWaiting =
-                                conn.getDatabase().execute(JDBC3PreparedStatement.this, batch);
+                                conn.getDatabase().execute(BasePreparedStatement.this, batch);
                         success = true;
                     } finally {
                         if (!success && !pointer.isClosed()) {
@@ -127,16 +127,15 @@ public abstract class JDBC3PreparedStatement extends CorePreparedStatement {
         pointer.safeRunConsume(DB::reset);
         exhaustedResults = false;
 
-        if (this.conn instanceof JDBC3Connection) {
-            ((JDBC3Connection) this.conn).tryEnforceTransactionMode();
+        if (this.conn instanceof BaseConnection) {
+            ((BaseConnection) this.conn).tryEnforceTransactionMode();
         }
 
         return this.withConnectionTimeout(
                 () -> {
                     synchronized (conn) {
                         long rc =
-                                conn.getDatabase()
-                                        .executeUpdate(JDBC3PreparedStatement.this, batch);
+                                conn.getDatabase().executeUpdate(BasePreparedStatement.this, batch);
                         updateGeneratedKeys();
                         return rc;
                     }

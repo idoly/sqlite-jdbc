@@ -7,9 +7,6 @@ RESOURCE_DIR = src/main/resources
 
 all: package
 
-deploy:
-	mvn package deploy -DperformRelease=true
-
 DOCKER_RUN_OPTS=--rm
 MVN:=mvn
 CODESIGN:=docker run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir gotson/rcodesign sign
@@ -202,13 +199,6 @@ mac64: $(SQLITE_UNPACKED)
 
 mac-arm64: $(SQLITE_UNPACKED)
 	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir -e CROSS_TRIPLE=aarch64-apple-darwin gotson/crossbuild make clean-native native OS_NAME=Mac OS_ARCH=aarch64 CROSS_PREFIX="/usr/osxcross/bin/aarch64-apple-darwin20.4-"
-
-# deprecated
-mac32: $(SQLITE_UNPACKED)
-	docker run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir -e CROSS_TRIPLE=i386-apple-darwin multiarch/crossbuild make clean-native native OS_NAME=Mac OS_ARCH=x86
-
-sparcv9:
-	$(MAKE) native OS_NAME=SunOS OS_ARCH=sparcv9
 
 mac64-signed: mac64
 	$(CODESIGN) src/main/resources/io/github/idoly/sqlite/native/Mac/x86_64/libsqlitejdbc.dylib

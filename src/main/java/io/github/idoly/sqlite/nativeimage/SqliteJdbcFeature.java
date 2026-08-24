@@ -2,7 +2,7 @@ package io.github.idoly.sqlite.nativeimage;
 
 import io.github.idoly.sqlite.SQLiteJDBCLoader;
 import io.github.idoly.sqlite.core.NativeDB;
-import io.github.idoly.sqlite.internal.JDBC3DatabaseMetaData;
+import io.github.idoly.sqlite.internal.BaseDatabaseMetaData;
 import io.github.idoly.sqlite.util.LibraryLoaderUtil;
 import io.github.idoly.sqlite.util.OSInfo;
 import io.github.idoly.sqlite.util.ProcessRunner;
@@ -16,7 +16,7 @@ public class SqliteJdbcFeature implements Feature {
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess a) {
         RuntimeClassInitialization.initializeAtBuildTime(SQLiteJDBCLoader.VersionHolder.class);
-        RuntimeClassInitialization.initializeAtBuildTime(JDBC3DatabaseMetaData.class);
+        RuntimeClassInitialization.initializeAtBuildTime(BaseDatabaseMetaData.class);
         RuntimeClassInitialization.initializeAtBuildTime(OSInfo.class);
         RuntimeClassInitialization.initializeAtBuildTime(ProcessRunner.class);
         RuntimeClassInitialization.initializeAtBuildTime(LibraryLoaderUtil.class);

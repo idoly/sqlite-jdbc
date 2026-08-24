@@ -18,7 +18,7 @@ import java.sql.Statement;
 import java.text.MessageFormat;
 import java.util.Arrays;
 
-public abstract class JDBC3Statement extends CoreStatement {
+public abstract class BaseStatement extends CoreStatement {
 
     private int queryTimeout; // in seconds, as per the JDBC spec
     protected long updateCount;
@@ -26,7 +26,7 @@ public abstract class JDBC3Statement extends CoreStatement {
 
     // PUBLIC INTERFACE /////////////////////////////////////////////
 
-    protected JDBC3Statement(SQLiteConnection conn) {
+    protected BaseStatement(SQLiteConnection conn) {
         super(conn);
         this.queryTimeout = 0;
     }
@@ -54,9 +54,9 @@ public abstract class JDBC3Statement extends CoreStatement {
                         return false;
                     }
 
-                    JDBC3Statement.this.sql = sql;
+                    BaseStatement.this.sql = sql;
                     synchronized (conn) {
-                        conn.getDatabase().prepare(JDBC3Statement.this);
+                        conn.getDatabase().prepare(BaseStatement.this);
                         boolean result = exec();
                         updateGeneratedKeys();
                         updateCount = getDatabase().changes();
@@ -92,7 +92,7 @@ public abstract class JDBC3Statement extends CoreStatement {
 
         return this.withConnectionTimeout(
                 () -> {
-                    conn.getDatabase().prepare(JDBC3Statement.this);
+                    conn.getDatabase().prepare(BaseStatement.this);
 
                     if (!exec()) {
                         internalClose();

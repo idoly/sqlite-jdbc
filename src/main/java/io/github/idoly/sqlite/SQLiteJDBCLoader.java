@@ -55,15 +55,7 @@ public final class SQLiteJDBCLoader {
         private VersionHolder() {}
 
         private static String loadVersion() {
-            URL versionFile =
-                    VersionHolder.class.getResource(
-                            "/META-INF/maven/io.github.idoly/sqlite-jdbc/pom.properties");
-            if (versionFile == null) {
-                versionFile =
-                        VersionHolder.class.getResource(
-                                "/META-INF/maven/io.github.idoly/sqlite-jdbc/VERSION");
-            }
-
+            URL versionFile = VersionHolder.class.getResource("/sqlite-jdbc.properties");
             String version = "unknown";
             try {
                 if (versionFile != null) {

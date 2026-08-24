@@ -1,12 +1,11 @@
-package io.github.idoly.sqlite.jdbc4;
+package io.github.idoly.sqlite.internal;
 
 import io.github.idoly.sqlite.SQLiteConnection;
-import io.github.idoly.sqlite.internal.JDBC3Statement;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-public class JDBC4Statement extends JDBC3Statement implements Statement {
-    public JDBC4Statement(SQLiteConnection conn) {
+public class StatementImpl extends BaseStatement implements Statement {
+    public StatementImpl(SQLiteConnection conn) {
         super(conn);
     }
 

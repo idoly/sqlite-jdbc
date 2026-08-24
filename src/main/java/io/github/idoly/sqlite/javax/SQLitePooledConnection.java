@@ -15,9 +15,9 @@ package io.github.idoly.sqlite.javax;
 
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.core.DB;
-import io.github.idoly.sqlite.jdbc4.JDBC4PooledConnection;
-import io.github.idoly.sqlite.jdbc4.JDBC4PreparedStatement;
-import io.github.idoly.sqlite.jdbc4.JDBC4Statement;
+import io.github.idoly.sqlite.internal.PooledConnectionImpl;
+import io.github.idoly.sqlite.internal.PreparedStatementImpl;
+import io.github.idoly.sqlite.internal.StatementImpl;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -46,7 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.ConnectionEvent;
 import javax.sql.ConnectionEventListener;
 
-public class SQLitePooledConnection extends JDBC4PooledConnection {
+public class SQLitePooledConnection extends PooledConnectionImpl {
 
     protected SQLiteConnection physicalConn;
     protected volatile Connection handleConn;
@@ -200,12 +200,12 @@ class SQLitePooledConnectionHandle extends SQLiteConnection {
 
     @Override
     public Statement createStatement() throws SQLException {
-        return new JDBC4Statement(this);
+        return new StatementImpl(this);
     }
 
     @Override
     public PreparedStatement prepareStatement(String sql) throws SQLException {
-        return new JDBC4PreparedStatement(this, sql);
+        return new PreparedStatementImpl(this, sql);
     }
 
     @Override

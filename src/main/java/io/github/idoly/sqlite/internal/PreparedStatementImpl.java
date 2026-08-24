@@ -1,7 +1,6 @@
-package io.github.idoly.sqlite.jdbc4;
+package io.github.idoly.sqlite.internal;
 
 import io.github.idoly.sqlite.SQLiteConnection;
-import io.github.idoly.sqlite.internal.JDBC3PreparedStatement;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -16,7 +15,7 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLXML;
 import java.util.Arrays;
 
-public class JDBC4PreparedStatement extends JDBC3PreparedStatement
+public class PreparedStatementImpl extends BasePreparedStatement
         implements PreparedStatement, ParameterMetaData {
 
     @Override
@@ -24,7 +23,7 @@ public class JDBC4PreparedStatement extends JDBC3PreparedStatement
         return sql + " \n parameters=" + Arrays.toString(batch);
     }
 
-    public JDBC4PreparedStatement(SQLiteConnection conn, String sql) throws SQLException {
+    public PreparedStatementImpl(SQLiteConnection conn, String sql) throws SQLException {
         super(conn, sql);
     }
 

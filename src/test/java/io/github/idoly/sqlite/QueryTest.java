@@ -13,7 +13,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.data.Offset.offset;
 
-import io.github.idoly.sqlite.date.FastDateFormat;
 import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -21,16 +20,25 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.TimeZone;
 import org.junit.jupiter.api.Test;
 
 public class QueryTest {
+    private static SimpleDateFormat dateFormat(TimeZone timeZone) {
+        SimpleDateFormat format =
+                new SimpleDateFormat(SQLiteConfig.DEFAULT_DATE_STRING_FORMAT, Locale.ROOT);
+        format.setTimeZone(timeZone);
+        return format;
+    }
+
     public Connection getConnection() throws SQLException {
         return DriverManager.getConnection("jdbc:sqlite::memory:");
     }
@@ -90,8 +98,7 @@ public class QueryTest {
         conn.createStatement().execute("create table sample (start_time datetime)");
 
         Date now = new Date();
-        String date =
-                FastDateFormat.getInstance(SQLiteConfig.DEFAULT_DATE_STRING_FORMAT).format(now);
+        String date = dateFormat(TimeZone.getDefault()).format(now);
 
         conn.createStatement().execute("insert into sample values(" + now.getTime() + ")");
         conn.createStatement().execute("insert into sample values('" + date + "')");
@@ -144,10 +151,8 @@ public class QueryTest {
         Calendar customCalendar = Calendar.getInstance(customTimeZone);
 
         java.sql.Date now = new java.sql.Date(new Date().getTime());
-        FastDateFormat customFormat =
-                FastDateFormat.getInstance(SQLiteConfig.DEFAULT_DATE_STRING_FORMAT, customTimeZone);
-        FastDateFormat utcFormat =
-                FastDateFormat.getInstance(SQLiteConfig.DEFAULT_DATE_STRING_FORMAT, utcTimeZone);
+        SimpleDateFormat customFormat = dateFormat(customTimeZone);
+        SimpleDateFormat utcFormat = dateFormat(utcTimeZone);
         java.sql.Date nowLikeCustomZoneIsUtc =
                 new java.sql.Date(utcFormat.parse(customFormat.format(now)).getTime());
 

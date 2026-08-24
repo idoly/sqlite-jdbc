@@ -19,7 +19,6 @@ package io.github.idoly.sqlite.core;
 import io.github.idoly.sqlite.SQLiteConnection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.regex.Pattern;
 
@@ -51,13 +50,6 @@ public abstract class CoreDatabaseMetaData implements DatabaseMetaData {
     protected CoreDatabaseMetaData(SQLiteConnection conn) {
         this.conn = conn;
     }
-
-    /**
-     * @deprecated Not exactly sure what this function does, as it is not implementing any
-     *     interface, and is not used anywhere in the code. Deprecated since 3.43.0.0.
-     */
-    @Deprecated
-    public abstract ResultSet getGeneratedKeys() throws SQLException;
 
     /**
      * @throws SQLException
@@ -202,11 +194,4 @@ public abstract class CoreDatabaseMetaData implements DatabaseMetaData {
             Pattern.compile(
                     ".*\\sCONSTRAINT\\s+(.*?)\\s+PRIMARY\\s+KEY\\s+\\((.*?)\\).*",
                     Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-
-    /**
-     * @see java.lang.Object#finalize()
-     */
-    protected void finalize() throws Throwable {
-        close();
-    }
 }

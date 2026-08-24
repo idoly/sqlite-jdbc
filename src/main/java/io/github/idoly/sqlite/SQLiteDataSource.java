@@ -178,30 +178,6 @@ public class SQLiteDataSource implements DataSource {
     }
 
     /**
-     * Enables or disables the count-changes flag. When enabled INSERT, UPDATE and DELETE statements
-     * return the number of rows they modified.
-     *
-     * @param enable True to enable; false to disable.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_count_changes">https://www.sqlite.org/pragma.html#pragma_count_changes</a>
-     */
-    public void setCountChanges(boolean enable) {
-        config.enableCountChanges(enable);
-    }
-
-    /**
-     * Sets the default maximum number of database disk pages that SQLite will hold in memory at
-     * once per open database file.
-     *
-     * @param numberOfPages The default suggested cache size.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_cache_size">https://www.sqlite.org/pragma.html#pragma_cache_size</a>
-     */
-    public void setDefaultCacheSize(int numberOfPages) {
-        config.setDefaultCacheSize(numberOfPages);
-    }
-
-    /**
      * Sets the text encoding used by the main database.
      *
      * @param encoding One of "UTF-8", "UTF-16le" (little-endian UTF-16) or "UTF-16be" (big-endian
@@ -222,19 +198,6 @@ public class SQLiteDataSource implements DataSource {
      */
     public void setEnforceForeignKeys(boolean enforce) {
         config.enforceForeignKeys(enforce);
-    }
-
-    /**
-     * Enables or disables the full_column_names flag. This flag together with the
-     * short_column_names flag determine the way SQLite assigns names to result columns of SELECT
-     * statements.
-     *
-     * @param enable True to enable; false to disable.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_full_column_names">https://www.sqlite.org/pragma.html#pragma_full_column_names</a>
-     */
-    public void setFullColumnNames(boolean enable) {
-        config.enableFullColumnNames(enable);
     }
 
     /**
@@ -282,33 +245,6 @@ public class SQLiteDataSource implements DataSource {
      */
     public void setJournalSizeLimit(int limit) {
         config.setJournalSizeLimit(limit);
-    }
-
-    /**
-     * Set the value of the legacy_file_format flag. When this flag is on, new databases are created
-     * in a file format that is readable and writable by all versions of SQLite going back to 3.0.0.
-     * When the flag is off, new databases are created using the latest file format which might not
-     * be readable or writable by versions of SQLite prior to 3.3.0.
-     *
-     * @param use True to turn on; false to turn off.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_legacy_file_format">https://www.sqlite.org/pragma.html#pragma_legacy_file_format</a>
-     */
-    public void setLegacyFileFormat(boolean use) {
-        config.useLegacyFileFormat(use);
-    }
-
-    /**
-     * Sets the value of the legacy_alter_table flag. When this flag is on, the ALTER TABLE RENAME
-     * command (for changing the name of a table) works as it did in SQLite 3.24.0 (2018-06-04) and
-     * earlier.When the flag is off, using the ALTER TABLE RENAME command will mean that all
-     * references to the table anywhere in the schema will be converted to the new name.
-     *
-     * @param flag True to turn on legacy alter table behaviour; false to turn off.
-     * @see <a href="https://www.sqlite.org/pragma.html#pragma_legacy_alter_table</a>
-     */
-    public void setLegacyAlterTable(boolean flag) {
-        config.setLegacyAlterTable(flag);
     }
 
     /**
@@ -382,20 +318,6 @@ public class SQLiteDataSource implements DataSource {
     }
 
     /**
-     * Enables or disables the short_column_names flag. This flag affects the way SQLite names
-     * columns of data returned by SELECT statements.
-     *
-     * @param enable True to enable; false to disable.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_short_column_names">https://www.sqlite.org/pragma.html#pragma_short_column_names</a>
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_fullfsync">https://www.sqlite.org/pragma.html#pragma_fullfsync</a>
-     */
-    public void setShortColumnNames(boolean enable) {
-        config.enableShortColumnNames(enable);
-    }
-
-    /**
      * Sets the setting of the "synchronous" flag.
      *
      * @param mode One of OFF, NORMAL or FULL;
@@ -416,18 +338,6 @@ public class SQLiteDataSource implements DataSource {
      */
     public void setTempStore(String storeType) {
         config.setTempStore(TempStore.valueOf(storeType));
-    }
-
-    /**
-     * Set the value of the sqlite3_temp_directory global variable, which many operating-system
-     * interface backends use to determine where to store temporary tables and indices.
-     *
-     * @param directoryName The temporary directory name.
-     * @see <a
-     *     href="https://www.sqlite.org/pragma.html#pragma_temp_store_directory">https://www.sqlite.org/pragma.html#pragma_temp_store_directory</a>
-     */
-    public void setTempStoreDirectory(String directoryName) {
-        config.setTempStoreDirectory(directoryName);
     }
 
     /**

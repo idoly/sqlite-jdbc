@@ -3,11 +3,9 @@ package io.github.idoly.sqlite.internal;
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.core.CoreDatabaseMetaData;
 import io.github.idoly.sqlite.core.CoreStatement;
-import io.github.idoly.sqlite.internal.JDBC3DatabaseMetaData.ImportedKeyFinder.ForeignKey;
+import io.github.idoly.sqlite.internal.BaseDatabaseMetaData.ImportedKeyFinder.ForeignKey;
 import io.github.idoly.sqlite.util.Logger;
 import io.github.idoly.sqlite.util.LoggerFactory;
-import io.github.idoly.sqlite.util.QueryUtils;
-import io.github.idoly.sqlite.util.StringUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
@@ -30,14 +28,40 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public abstract class JDBC3DatabaseMetaData extends CoreDatabaseMetaData {
+public abstract class BaseDatabaseMetaData extends CoreDatabaseMetaData {
+
+    private static String valuesQuery(List<String> columns, List<List<Object>> rows) {
+        if (rows.stream().anyMatch(row -> row.size() != columns.size())) {
+            throw new IllegalArgumentException("values and columns must have the same size");
+        }
+        String values =
+                rows.stream()
+                        .map(
+                                row ->
+                                        row.stream()
+                                                .map(
+                                                        value -> {
+                                                            if (value == null) return "null";
+                                                            if (value instanceof String) {
+                                                                return "'" + value + "'";
+                                                            }
+                                                            return value.toString();
+                                                        })
+                                                .collect(Collectors.joining(",", "(", ")")))
+                        .collect(Collectors.joining(","));
+        return "with cte("
+                + String.join(",", columns)
+                + ") as (values "
+                + values
+                + ") select * from cte";
+    }
 
     private static String driverName;
     private static String driverVersion;
 
     static {
         try (InputStream sqliteJdbcPropStream =
-                JDBC3DatabaseMetaData.class
+                BaseDatabaseMetaData.class
                         .getClassLoader()
                         .getResourceAsStream("sqlite-jdbc.properties")) {
             if (sqliteJdbcPropStream == null) {
@@ -54,7 +78,7 @@ public abstract class JDBC3DatabaseMetaData extends CoreDatabaseMetaData {
         }
     }
 
-    protected JDBC3DatabaseMetaData(SQLiteConnection conn) {
+    protected BaseDatabaseMetaData(SQLiteConnection conn) {
         super(conn);
     }
 
@@ -1881,7 +1905,7 @@ public abstract class JDBC3DatabaseMetaData extends CoreDatabaseMetaData {
                 rs.close();
             }
 
-            String sqlBlock = StringUtils.join(unionAll, " union all ");
+            String sqlBlock = String.join(" union all ", unionAll);
 
             return ((CoreStatement) stat)
                     .executeQuery(sql.append(sqlBlock).append(");").toString(), true);
@@ -2068,7 +2092,7 @@ public abstract class JDBC3DatabaseMetaData extends CoreDatabaseMetaData {
     public ResultSet getTypeInfo() throws SQLException {
         if (getTypeInfo == null) {
             String sql =
-                    QueryUtils.valuesQuery(
+                    valuesQuery(
                                     Arrays.asList(
                                             "TYPE_NAME",
                                             "DATA_TYPE",
@@ -2223,15 +2247,6 @@ public abstract class JDBC3DatabaseMetaData extends CoreDatabaseMetaData {
                                     + "null as BUFFER_LENGTH, null as DECIMAL_DIGITS, null as PSEUDO_COLUMN limit 0;");
         }
         return getVersionColumns.executeQuery();
-    }
-
-    /**
-     * @deprecated Not exactly sure what this function does, as it is not implementing any
-     *     interface, and is not used anywhere in the code. Deprecated since 3.43.0.0.
-     */
-    @Deprecated
-    public ResultSet getGeneratedKeys() throws SQLException {
-        throw new SQLFeatureNotSupportedException("not implemented by SQLite JDBC driver");
     }
 
     /** Not implemented yet. */
@@ -2548,6 +2563,6 @@ public abstract class JDBC3DatabaseMetaData extends CoreDatabaseMetaData {
      * framework in native-image
      */
     private static class LogHolder {
-        private static final Logger logger = LoggerFactory.getLogger(JDBC3DatabaseMetaData.class);
+        private static final Logger logger = LoggerFactory.getLogger(BaseDatabaseMetaData.class);
     }
 }

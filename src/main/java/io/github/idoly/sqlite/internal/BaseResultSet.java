@@ -3,7 +3,6 @@ package io.github.idoly.sqlite.internal;
 import io.github.idoly.sqlite.core.CoreResultSet;
 import io.github.idoly.sqlite.core.CoreStatement;
 import io.github.idoly.sqlite.core.DB;
-import io.github.idoly.sqlite.date.FastDateFormat;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.Reader;
@@ -25,10 +24,10 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public abstract class JDBC3ResultSet extends CoreResultSet {
+public abstract class BaseResultSet extends CoreResultSet {
     // ResultSet Functions //////////////////////////////////////////
 
-    protected JDBC3ResultSet(CoreStatement stmt) {
+    protected BaseResultSet(CoreStatement stmt) {
         super(stmt);
     }
 
@@ -294,8 +293,7 @@ public abstract class JDBC3ResultSet extends CoreResultSet {
                     return null;
                 }
                 try {
-                    return new Date(
-                            getConnectionConfig().getDateFormat().parse(dateText).getTime());
+                    return new Date(getConnectionConfig().parseDate(dateText).getTime());
                 } catch (Exception e) {
                     throw new SQLException("Error parsing date", e);
                 }
@@ -323,11 +321,8 @@ public abstract class JDBC3ResultSet extends CoreResultSet {
                     return null;
                 }
                 try {
-                    FastDateFormat dateFormat =
-                            FastDateFormat.getInstance(
-                                    getConnectionConfig().getDateStringFormat(), cal.getTimeZone());
-
-                    return new java.sql.Date(dateFormat.parse(dateText).getTime());
+                    return new java.sql.Date(
+                            getConnectionConfig().parseDate(dateText, cal.getTimeZone()).getTime());
                 } catch (Exception e) {
                     throw new SQLException("Error parsing time stamp", e);
                 }
@@ -460,8 +455,7 @@ public abstract class JDBC3ResultSet extends CoreResultSet {
                     return null;
                 }
                 try {
-                    return new Time(
-                            getConnectionConfig().getDateFormat().parse(dateText).getTime());
+                    return new Time(getConnectionConfig().parseDate(dateText).getTime());
                 } catch (Exception e) {
                     throw new SQLException("Error parsing time", e);
                 }
@@ -489,11 +483,8 @@ public abstract class JDBC3ResultSet extends CoreResultSet {
                     return null;
                 }
                 try {
-                    FastDateFormat dateFormat =
-                            FastDateFormat.getInstance(
-                                    getConnectionConfig().getDateStringFormat(), cal.getTimeZone());
-
-                    return new Time(dateFormat.parse(dateText).getTime());
+                    return new Time(
+                            getConnectionConfig().parseDate(dateText, cal.getTimeZone()).getTime());
                 } catch (Exception e) {
                     throw new SQLException("Error parsing time", e);
                 }
@@ -536,8 +527,7 @@ public abstract class JDBC3ResultSet extends CoreResultSet {
                     return null;
                 }
                 try {
-                    return new Timestamp(
-                            getConnectionConfig().getDateFormat().parse(dateText).getTime());
+                    return new Timestamp(getConnectionConfig().parseDate(dateText).getTime());
                 } catch (Exception e) {
                     throw new SQLException("Error parsing time stamp", e);
                 }
@@ -566,11 +556,8 @@ public abstract class JDBC3ResultSet extends CoreResultSet {
                     return null;
                 }
                 try {
-                    FastDateFormat dateFormat =
-                            FastDateFormat.getInstance(
-                                    getConnectionConfig().getDateStringFormat(), cal.getTimeZone());
-
-                    return new Timestamp(dateFormat.parse(dateText).getTime());
+                    return new Timestamp(
+                            getConnectionConfig().parseDate(dateText, cal.getTimeZone()).getTime());
                 } catch (Exception e) {
                     throw new SQLException("Error parsing time stamp", e);
                 }

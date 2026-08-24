@@ -16,7 +16,7 @@
 
 package io.github.idoly.sqlite;
 
-import io.github.idoly.sqlite.jdbc4.JDBC4Connection;
+import io.github.idoly.sqlite.internal.ConnectionImpl;
 import io.github.idoly.sqlite.util.Logger;
 import io.github.idoly.sqlite.util.LoggerFactory;
 import java.sql.*;
@@ -123,6 +123,6 @@ public class JDBC implements Driver {
         }
 
         url = url.trim();
-        return new JDBC4Connection(url, extractAddress(url), prop);
+        return new ConnectionImpl(url, extractAddress(url), prop);
     }
 }

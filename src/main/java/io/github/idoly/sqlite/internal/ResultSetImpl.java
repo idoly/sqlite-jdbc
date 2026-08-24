@@ -1,7 +1,6 @@
-package io.github.idoly.sqlite.jdbc4;
+package io.github.idoly.sqlite.internal;
 
 import io.github.idoly.sqlite.core.CoreStatement;
-import io.github.idoly.sqlite.internal.JDBC3ResultSet;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -30,9 +29,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Map;
 
-public class JDBC4ResultSet extends JDBC3ResultSet implements ResultSet, ResultSetMetaData {
+public class ResultSetImpl extends BaseResultSet implements ResultSet, ResultSetMetaData {
 
-    public JDBC4ResultSet(CoreStatement stmt) {
+    public ResultSetImpl(CoreStatement stmt) {
         super(stmt);
     }
 
@@ -41,8 +40,8 @@ public class JDBC4ResultSet extends JDBC3ResultSet implements ResultSet, ResultS
         final boolean wasOpen = isOpen(); // prevent close() recursion
         super.close();
         // close-on-completion regardless of closeStmt
-        if (wasOpen && stmt instanceof JDBC4Statement) {
-            JDBC4Statement stat = (JDBC4Statement) stmt;
+        if (wasOpen && stmt instanceof StatementImpl) {
+            StatementImpl stat = (StatementImpl) stmt;
             // check if its not closed already in which case no-op
             if (stat.closeOnCompletion && !stat.isClosed()) {
                 stat.close();
@@ -325,49 +324,27 @@ public class JDBC4ResultSet extends JDBC3ResultSet implements ResultSet, ResultS
         if (type == LocalDate.class) {
             try {
                 Date date = getDate(columnIndex);
-                if (date != null)
-                    // inlining of java.sql.Date.toLocateDate() for Android
-                    return type.cast(
-                            LocalDate.of(
-                                    date.getYear() + 1900, date.getMonth() + 1, date.getDate()));
-                else return null;
+                return date == null ? null : type.cast(date.toLocalDate());
             } catch (SQLException sqlException) {
-                // If the FastDateParser failed, try parse it with LocalDate.
-                // It's a workaround for a value like '2022-12-1' (i.e no time presents).
+                // Accept an ISO date without a time component.
                 return type.cast(LocalDate.parse(getString(columnIndex)));
             }
         }
         if (type == LocalTime.class) {
             try {
                 Time time = getTime(columnIndex);
-                if (time != null)
-                    // inlining of java.sql.Date.toLocateTime() for Android
-                    return type.cast(
-                            LocalTime.of(time.getHours(), time.getMinutes(), time.getSeconds()));
-                else return null;
+                return time == null ? null : type.cast(time.toLocalTime());
             } catch (SQLException sqlException) {
-                // If the FastDateParser failed, try parse it with LocalTime.
-                // It's a workaround for a value like '11:22:22' (i.e no date presents).
+                // Accept an ISO time without a date component.
                 return type.cast(LocalTime.parse(getString(columnIndex)));
             }
         }
         if (type == LocalDateTime.class) {
             try {
                 Timestamp timestamp = getTimestamp(columnIndex);
-                if (timestamp != null)
-                    // inlining of java.sql.Date.toLocateDateTime() for Android
-                    return type.cast(
-                            LocalDateTime.of(
-                                    timestamp.getYear() + 1900,
-                                    timestamp.getMonth() + 1,
-                                    timestamp.getDate(),
-                                    timestamp.getHours(),
-                                    timestamp.getMinutes(),
-                                    timestamp.getSeconds(),
-                                    timestamp.getNanos()));
-                else return null;
+                return timestamp == null ? null : type.cast(timestamp.toLocalDateTime());
             } catch (SQLException e) {
-                // If the FastDateParser failed, try parse it with LocalDateTime.
+                // Accept an ISO local date-time.
                 return type.cast(LocalDateTime.parse(getString(columnIndex)));
             }
         }

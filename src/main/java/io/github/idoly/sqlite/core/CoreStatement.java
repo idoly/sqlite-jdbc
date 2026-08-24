@@ -17,8 +17,8 @@ package io.github.idoly.sqlite.core;
 
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.SQLiteConnectionConfig;
-import io.github.idoly.sqlite.internal.JDBC3Connection;
-import io.github.idoly.sqlite.jdbc4.JDBC4ResultSet;
+import io.github.idoly.sqlite.internal.BaseConnection;
+import io.github.idoly.sqlite.internal.ResultSetImpl;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -47,7 +47,7 @@ public abstract class CoreStatement implements Codes {
 
     protected CoreStatement(SQLiteConnection c) {
         conn = c;
-        rs = new JDBC4ResultSet(this);
+        rs = new ResultSetImpl(this);
     }
 
     public DB getDatabase() {
@@ -83,8 +83,8 @@ public abstract class CoreStatement implements Codes {
         if (sql == null) throw new SQLException("SQLiteJDBC internal error: sql==null");
         if (rs.isOpen()) throw new SQLException("SQLite JDBC internal error: rs.isOpen() on exec.");
 
-        if (this.conn instanceof JDBC3Connection) {
-            ((JDBC3Connection) this.conn).tryEnforceTransactionMode();
+        if (this.conn instanceof BaseConnection) {
+            ((BaseConnection) this.conn).tryEnforceTransactionMode();
         }
 
         boolean success = false;
@@ -115,8 +115,8 @@ public abstract class CoreStatement implements Codes {
         if (sql == null) throw new SQLException("SQLiteJDBC internal error: sql==null");
         if (rs.isOpen()) throw new SQLException("SQLite JDBC internal error: rs.isOpen() on exec.");
 
-        if (this.conn instanceof JDBC3Connection) {
-            ((JDBC3Connection) this.conn).tryEnforceTransactionMode();
+        if (this.conn instanceof BaseConnection) {
+            ((BaseConnection) this.conn).tryEnforceTransactionMode();
         }
 
         boolean rc = false;

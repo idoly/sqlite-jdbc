@@ -18,15 +18,14 @@ package io.github.idoly.sqlite.core;
 
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.SQLiteConnectionConfig;
-import io.github.idoly.sqlite.date.FastDateFormat;
-import io.github.idoly.sqlite.internal.JDBC3Connection;
-import io.github.idoly.sqlite.jdbc4.JDBC4Statement;
+import io.github.idoly.sqlite.internal.BaseConnection;
+import io.github.idoly.sqlite.internal.StatementImpl;
 import java.sql.Date;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Calendar;
 
-public abstract class CorePreparedStatement extends JDBC4Statement {
+public abstract class CorePreparedStatement extends StatementImpl {
     protected int columnCount;
     protected int paramCount;
     protected int batchQueryCount;
@@ -53,7 +52,7 @@ public abstract class CorePreparedStatement extends JDBC4Statement {
     }
 
     /**
-     * @see io.github.idoly.sqlite.internal.JDBC3Statement#executeBatch()
+     * @see io.github.idoly.sqlite.internal.BaseStatement#executeBatch()
      */
     @Override
     public int[] executeBatch() throws SQLException {
@@ -61,7 +60,7 @@ public abstract class CorePreparedStatement extends JDBC4Statement {
     }
 
     /**
-     * @see io.github.idoly.sqlite.internal.JDBC3Statement#executeLargeBatch()
+     * @see io.github.idoly.sqlite.internal.BaseStatement#executeLargeBatch()
      */
     @Override
     public long[] executeLargeBatch() throws SQLException {
@@ -69,8 +68,8 @@ public abstract class CorePreparedStatement extends JDBC4Statement {
             return new long[] {};
         }
 
-        if (this.conn instanceof JDBC3Connection) {
-            ((JDBC3Connection) this.conn).tryEnforceTransactionMode();
+        if (this.conn instanceof BaseConnection) {
+            ((BaseConnection) this.conn).tryEnforceTransactionMode();
         }
 
         return this.withConnectionTimeout(
@@ -86,7 +85,7 @@ public abstract class CorePreparedStatement extends JDBC4Statement {
     }
 
     /**
-     * @see io.github.idoly.sqlite.internal.JDBC3Statement#clearBatch() ()
+     * @see io.github.idoly.sqlite.internal.BaseStatement#clearBatch() ()
      */
     @Override
     public void clearBatch() throws SQLException {
@@ -117,11 +116,7 @@ public abstract class CorePreparedStatement extends JDBC4Statement {
         SQLiteConnectionConfig config = conn.getConnectionConfig();
         switch (config.getDateClass()) {
             case TEXT:
-                batch(
-                        pos,
-                        FastDateFormat.getInstance(
-                                        config.getDateStringFormat(), calendar.getTimeZone())
-                                .format(new Date(value)));
+                batch(pos, config.formatDate(new Date(value), calendar.getTimeZone()));
                 break;
 
             case REAL:
