@@ -1,226 +1,204 @@
-= SQLite JDBC Driver
-:project-version: 3.53.2.1
+= SQLite JDBC JDK 25 FFM 版
+:project-version: 3.53.2.2-SNAPSHOT
 
-image:https://img.shields.io/github/actions/workflow/status/xerial/sqlite-jdbc/ci.yml?branch=master[GitHub Workflow Status (branch),link=https://github.com/xerial/sqlite-jdbc/actions/workflows/ci.yml?query=branch%3Amaster]
-image:https://badges.gitter.im/xerial/sqlite-jdbc.svg[Join the chat,link=https://gitter.im/xerial/sqlite-jdbc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge]
-image:https://img.shields.io/maven-central/v/org.xerial/sqlite-jdbc?label=maven%20central&color=dark-green[Maven Central,link=https://central.sonatype.com/artifact/org.xerial/sqlite-jdbc]
-image:https://javadoc.io/badge2/org.xerial/sqlite-jdbc/javadoc.svg[javadoc,link=https://javadoc.io/doc/org.xerial/sqlite-jdbc]
-image:https://img.shields.io/maven-metadata/v?color=blue&label=maven%20snapshot&metadataUrl=https%3A%2F%2Fcentral.sonatype.com%2Frepository%2Fmaven-snapshots%2Forg%2Fxerial%2Fsqlite-jdbc%2Fmaven-metadata.xml[]
+image:https://img.shields.io/github/actions/workflow/status/idoly/sqlite-jdbc/ci.yml?branch=main[构建状态,link=https://github.com/idoly/sqlite-jdbc/actions/workflows/ci.yml]
+image:https://img.shields.io/badge/JDK-25+-blue[JDK 25+]
+image:https://img.shields.io/badge/backend-FFM-green[FFM]
 
-SQLite JDBC is a library for accessing and creating https://www.sqlite.org[SQLite] database files in Java.
+本项目基于 https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc] 的 JDBC 层，将底层 JNI 桥迁移为 JDK 25 标准的 Foreign Function and Memory API（FFM）。项目直接调用 SQLite 公开的 `sqlite3_*` C ABI，不包含 JNI Java 桥。
 
-SQLite JDBC requires JDK 25 or later and calls SQLite's public `sqlite3_*` ABI through the standard Foreign Function and Memory API. Grant native access with `--enable-native-access=ALL-UNNAMED` on the class path, or to `org.xerial.sqlitejdbc` on the module path.
+== 与 xerial/sqlite-jdbc 的区别
 
-Select an external SQLite library with `-Dorg.sqlite.ffm.lib.path=/absolute/path/to/libsqlite3.so` (or the platform equivalent). Without that property, the driver uses a compatible packaged library when available, then falls back to `libsqlite3.so.0` on Linux, `libsqlite3.dylib` on macOS, or `sqlite3` on Windows.
+[cols="1,2,2"]
+|===
+|项目 |本项目 |xerial 官方项目
 
-== Project Status
+|仓库
+|https://github.com/idoly/sqlite-jdbc[idoly/sqlite-jdbc]
+|https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc]
 
-The project is maintained, but is not being actively developed:
+|最低 Java 版本
+|JDK 25
+|由上游当前版本决定，通常兼容更早的 Java
 
-- We follow every new version of SQLite and will release a corresponding version of our driver.
-- Bugs will be investigated, and fixed if possible.
-- New features are driven by pull requests.
+|本地调用方式
+|标准 `java.lang.foreign` FFM
+|JNI `NativeDB.c`
 
-The current maintainer of the project is https://github.com/gotson[gotson].
+|本地库 ABI
+|直接导出并调用 `sqlite3_*`
+|导出 Java JNI 入口
 
-== Usage
+|Java 后端
+|仅 FFM，不提供 JNI 或纯 Java兼容后端
+|JNI 后端
 
-➡️ More usage examples and configuration are available in link:USAGE.md[USAGE.md]
+|Android
+|不支持，Android 运行时没有 JDK 25 FFM
+|上游提供 Android JNI 资源
 
-SQLite JDBC is a library for accessing SQLite databases through the JDBC API. For the general usage of JDBC, see https://docs.oracle.com/javase/tutorial/jdbc/index.html[JDBC Tutorial] or https://www.oracle.com/technetwork/java/javase/tech/index-jsp-136101.html[Oracle JDBC Documentation].
+|模块结构
+|单 Maven 模块
+|单 Maven 模块
 
-. <<Download,Download>> `sqlite-jdbc-{project-version}.jar`
-then append this jar file into your classpath.
-. Open a SQLite database connection from your code. (see the example below)
+|Java 包名
+|`io.github.idoly.sqlite`
+|`org.sqlite`
 
-=== Example usage
+|Maven 坐标
+|`io.github.idoly:sqlite-jdbc`
+|`org.xerial:sqlite-jdbc`
 
-Assuming `sqlite-jdbc-{project-version}.jar` is placed in the current directory.
+|JDBC/API
+|仅支持 JDK 25 `java.sql` / JDBC 4.3；API 已迁移到新包名
+|上游 `org.sqlite` API 及其历史兼容范围
 
-[source,shell,subs="attributes+"]
+|GraalVM native-image
+|使用 FFM reachability metadata 和 shared Arena
+|使用上游 JNI 配置
+
+|发布状态
+|当前从本仓库源码构建
+|官方版本发布到 Maven Central
+|===
+
+IMPORTANT: xerial 官方产物坐标是 `org.xerial:sqlite-jdbc`，不包含本仓库的 FFM 修改。本项目坐标是 `io.github.idoly:sqlite-jdbc`，Java 包名是 `io.github.idoly.sqlite`，不能与 xerial JAR 混用，也不保证 `org.sqlite` 源码或二进制兼容。当前应从本仓库源码构建，或使用本仓库后续发布的明确版本。
+
+== 要求
+
+* JDK 25 或更高版本
+* Maven 3.9 或更高版本
+* 可用的 SQLite 动态库：本项目构建的纯 SQLite 库、系统 SQLite，或通过属性指定的库
+* 启动 JVM 时授予 native access
+
+类路径运行：
+
+[source,shell]
 ----
-> javac Sample.java
-> java -classpath ".;sqlite-jdbc-{project-version}.jar" Sample   # in Windows
-or
-> java -classpath ".:sqlite-jdbc-{project-version}.jar" Sample   # in macOS or Linux
-name = leo
-id = 1
-name = yui
-id = 2
+java --enable-native-access=ALL-UNNAMED -cp "sqlite-jdbc.jar:slf4j-api.jar:." your.Main
 ----
 
-=== Sample.java
+模块路径运行：
+
+[source,shell]
+----
+java --enable-native-access=io.github.idoly.sqlitejdbc \
+  --module-path sqlite-jdbc.jar:slf4j-api.jar \
+  --module your.module/your.Main
+----
+
+== 构建
+
+[source,shell]
+----
+git clone https://github.com/idoly/sqlite-jdbc.git
+cd sqlite-jdbc
+mvn --batch-mode --no-transfer-progress clean package
+----
+
+主要产物：
+
+[source,text]
+----
+target/sqlite-jdbc-3.53.2.2-SNAPSHOT.jar
+target/sqlite-jdbc-3.53.2.2-SNAPSHOT-without-natives.jar
+----
+
+安装到本地 Maven 仓库：
+
+[source,shell]
+----
+mvn install
+----
+
+== 快速使用
 
 [source,java]
 ----
-    import java.sql.Connection;
-    import java.sql.DriverManager;
-    import java.sql.ResultSet;
-    import java.sql.SQLException;
-    import java.sql.Statement;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 
-    public class Sample
-    {
-      public static void main(String[] args)
-      {
-        // NOTE: Connection and Statement are AutoCloseable.
-        //       Don't forget to close them both in order to avoid leaks.
-        try
-        (
-          // create a database connection
-          Connection connection = DriverManager.getConnection("jdbc:sqlite:sample.db");
-          Statement statement = connection.createStatement();
-        )
-        {
-          statement.setQueryTimeout(30);  // set timeout to 30 sec.
-
-          statement.executeUpdate("drop table if exists person");
-          statement.executeUpdate("create table person (id integer, name string)");
-          statement.executeUpdate("insert into person values(1, 'leo')");
-          statement.executeUpdate("insert into person values(2, 'yui')");
-          ResultSet rs = statement.executeQuery("select * from person");
-          while(rs.next())
-          {
-            // read the result set
-            System.out.println("name = " + rs.getString("name"));
-            System.out.println("id = " + rs.getInt("id"));
-          }
+public class Sample {
+    public static void main(String[] args) throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:sample.db");
+                Statement statement = connection.createStatement()) {
+            statement.executeUpdate("create table if not exists person(id integer, name text)");
+            statement.executeUpdate("insert into person values(1, 'Alice')");
+            try (ResultSet result = statement.executeQuery("select id, name from person")) {
+                while (result.next()) {
+                    System.out.println(result.getInt(1) + ": " + result.getString(2));
+                }
+            }
         }
-        catch(SQLException e)
-        {
-          // if the error message is "out of memory",
-          // it probably means no database file is found
-          e.printStackTrace(System.err);
-        }
-      }
     }
-
+}
 ----
 
-== How does SQLiteJDBC work?
+== SQLite 动态库选择
 
-Our SQLite JDBC driver package (i.e., `sqlite-jdbc-{project-version}.jar`) contains three
-types of native SQLite libraries (`sqlitejdbc.dll`, `sqlitejdbc.dylib`, `sqlitejdbc.so`),
-each of them is compiled for Windows, macOS and Linux. An appropriate native library
-file is automatically extracted into your OS's temporary folder, when your program
-loads `org.sqlite.JDBC` driver.
+按以下顺序选择 SQLite：
 
-=== Supported Operating Systems
+. `io.github.idoly.sqlite.ffm.lib.path` 指定的完整文件路径；
+. JAR 中与当前平台匹配、且导出 `sqlite3_*` 的资源；
+. 系统动态库：Linux 为 `libsqlite3.so.0`，macOS 为 `libsqlite3.dylib`，Windows 为 `sqlite3`。
 
-Since sqlite-jdbc-3.6.19, the natively compiled SQLite engines will be used for
-the following operating systems:
+指定自定义库：
 
-|===
-| |x86 |x86_64 |armv5 |armv6 |armv7 |arm64 |ppc64 | riscv64
-
-|Windows |✔ |✔ | | |✔ |✔ | |
-|macOS | |✔ | | | |✔ | |
-|Linux (libc) |✔ |✔ |✔ |✔ |✔ |✔ |✔ |✔
-|Linux (musl) |✔ |✔ | | | |✔ | |
-|FreeBSD |✔ |✔ | | | |✔ | |
-|===
-
-Android is not supported by the FFM backend because its runtime does not provide JDK 25's `java.lang.foreign` API. Other operating systems can use an external SQLite library through `org.sqlite.ffm.lib.path` when a compatible JDK 25 port is available.
-
-If you want to use the native library for your OS, link:./CONTRIBUTING.md[build the source from scratch].
-
-=== JARs
-
-Since version `3.53.0.0` multiple JARs are published with different classifiers:
-
-|===
-|Classifier|Content
-|Default jar|Classes + all native libraries (except Android)
-|`without-natives`|Classes only
-|`natives-all`|Only native libraries (except Android)
-|`natives-linux`|Only native libraries for Linux
-|`natives-mac`|Only native libraries for Mac
-|`natives-windows`|Only native libraries for Windows
-|`natives-freebsd`|Only native libraries for FreeBSD
-|===
-
-=== GraalVM native-image support
-
-SQLite JDBC supports GraalVM for JDK 25. The JAR contains FFM reachability metadata and enables shared Arena support. A packaged SQLite library is included in the native image when present; otherwise provide `org.sqlite.ffm.lib.path` at runtime or install SQLite in the system library path.
-
-== Download
-
-Download from https://central.sonatype.com/artifact/org.xerial/sqlite-jdbc[Maven Central] or from the https://github.com/xerial/sqlite-jdbc/releases[releases] page.
-
-[source,xml,subs="attributes+"]
+[source,shell]
 ----
-<dependencies>
-    <dependency>
-      <groupId>org.xerial</groupId>
-      <artifactId>sqlite-jdbc</artifactId>
-      <version>{project-version}</version>
-    </dependency>
-</dependencies>
+java --enable-native-access=ALL-UNNAMED \
+  -Dio.github.idoly.sqlite.ffm.lib.path=/absolute/path/to/libsqlite3.so \
+  -cp "sqlite-jdbc.jar:slf4j-api.jar:." your.Main
 ----
 
-Snapshots of the development version are available in https://oss.sonatype.org/content/repositories/snapshots/org/xerial/sqlite-jdbc/[Sonatype's snapshots repository].
+自定义库必须与当前进程架构一致，并导出驱动使用的 SQLite 公开 API。旧 xerial JNI `libsqlitejdbc` 二进制不能用于本项目。
 
-=== Validating downloads
+== JDBC 与 SQL 支持范围
 
-Maven Central resources are signed using https://gnupg.org/[GPG] and the signature files, ending in .asc, are available in the same location as the other downloads.
+本项目只支持 JDK 25+ 提供的 `java.sql` API，JDBC 规范版本为 JDBC 4.3。JDBC 没有独立的网络线协议，也没有 JDK 25 对应的 JDBC 5；驱动与进程内 SQLite 通过 C ABI 通信。
 
-The following key is currently used to sign releases:
+源码中的 `io.github.idoly.sqlite.internal` 是从 xerial 继承的历史类名和实现分层，不表示支持 JDBC 3。用户只应依赖标准 `java.sql`、`javax.sql`、`io.github.idoly.sqlite` 和 `io.github.idoly.sqlite.jdbc4` API；直接使用 `io.github.idoly.sqlite.internal` 不属于本项目承诺的兼容范围。后续可在不影响 JDBC 4.3 行为的独立重构中移除这层遗留。
 
-----
+SQL 语法由实际加载的 SQLite 动态库决定。本仓库构建基线为 SQLite 3.53.2；使用外部库时，以该库支持的 SQLite SQL、PRAGMA 和扩展能力为准。
 
------BEGIN PGP PUBLIC KEY BLOCK-----
-Comment: C1CB A75E C9BD 0BAF 8061  9354 59E0 5CE6 1818 7ED4
-Comment: Taro L. Saito (For GitHub Actions) <leo@xerial.org>
+== 已迁移能力
 
-xjMEYuRVGhYJKwYBBAHaRw8BAQdA2Dp4m1Yhtb1g94pQzzL24FuP6b9KXF8lP9Dh
-hZnynhfNM1Rhcm8gTC4gU2FpdG8gKEZvciBHaXRIdWIgQWN0aW9ucykgPGxlb0B4
-ZXJpYWwub3JnPsKUBBMWCgA8FiEEwcunXsm9C6+AYZNUWeBc5hgYftQFAmLkVRoC
-GwMFCwkIBwIDIgIBBhUKCQgLAgQWAgMBAh4HAheAAAoJEFngXOYYGH7UfPwBAK7x
-TVRebZeWcAwmGaMUsbg7SgJou8xnkhByObPLUC/4AQDPsZeYmi4KXyXPzmqhCicd
-Y+ZSJWIDQqitK2ujPDFXA844BGLkVRoSCisGAQQBl1UBBQEBB0Atu9kejBi+6wfO
-T0a9z/LYEEdNXM/VX6xt1onKToPPdQMBCAfCeAQYFgoAIBYhBMHLp17JvQuvgGGT
-VFngXOYYGH7UBQJi5FUaAhsMAAoJEFngXOYYGH7UlMABAKyRCazhVyUFg5FOpAnm
-ckBY38CaMGPPLXVyY8Kr6dYFAP9wYLu7nsDZCOXkAgS+et4Pk1WZCggoYUkxsX1o
-0KZXBQ==
-=Wyas
------END PGP PUBLIC KEY BLOCK-----
+* Connection、Statement、PreparedStatement 和 ResultSet
+* 参数绑定、BLOB、列元数据和错误码映射
+* 事务、busy timeout、interrupt 和 SQLite limits
+* Online Backup / Restore
+* Serialize / Deserialize
+* Scalar、Aggregate 和 Window Function
+* Collation
+* BusyHandler 和 ProgressHandler
+* commit、rollback 和 update hooks
+* 多 classloader
+* GraalVM native-image
 
-----
+FFM callback 使用连接级 shared `Arena` 和强引用注册表管理。关闭连接时先注销 SQLite callback，再关闭数据库和 Arena。
 
-=== Project versioning explained
+== 平台说明
 
-The project's version follows the version of the SQLite library that is bundled in the jar, with an extra digit to denote the project's increment.
+本项目的 Java 层要求目标平台存在可运行 JDK 25 FFM 的 JVM。Android 不满足该条件，因此不支持 Android。
 
-For example, if the SQLite version is `3.39.2`, the project version will be `3.39.2.x`, where `x` starts at 0, and increments with every release that is not changing the SQLite version.
+仓库不保留旧 JNI 平台二进制。各平台资源由 `Build Native` GitHub Actions workflow 使用 link:Makefile[Makefile] 重新生成。生成库仅包含 SQLite amalgamation 和扩展，并直接导出 `sqlite3_*`。
 
-If the SQLite version is updated to `3.40.0`, the project version will be updated to `3.40.0.0`.
+== 测试状态
 
-=== Hint for maven-shade-plugin
+当前迁移基线：
 
-You may need to add shade plugin transformer to solve `No suitable driver found for jdbc:sqlite:` issue.
+* JVM 测试：459 项，0 failure，0 error
+* GraalVM native-image：398 项通过
+* 已注册 31 种 FFM downcall descriptor 和 6 种 upcall descriptor
 
-[source,xml]
-----
-<transformer
-	implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-	<resource>META-INF/services/java.sql.Driver</resource>
-</transformer>
-----
+== 文档
 
-[source,xml,subs="attributes+"]
-----
-<dependency>
-    <groupId>org.xerial</groupId>
-    <artifactId>sqlite-jdbc</artifactId>
-    <version>{project-version}</version>
-</dependency>
-----
+* link:USAGE.md[使用说明]
+* link:CONTRIBUTING.md[开发与贡献]
+* link:SECURITY.md[安全策略]
 
-== How can I help?
+== 许可证与上游归属
 
-We are always looking for:
-
-- *Reviewers* for issues or PRs, you can check image:https://img.shields.io/github/labels/xerial/sqlite-jdbc/review%20wanted[GitHub labels,link=https://github.com/xerial/sqlite-jdbc/labels/review%20wanted]
-- *Contributors* to submit PRs, you can check image:https://img.shields.io/github/labels/xerial/sqlite-jdbc/help%20wanted[GitHub labels,link=https://github.com/xerial/sqlite-jdbc/labels/help%20wanted] and image:https://img.shields.io/github/labels/xerial/sqlite-jdbc/good%20first%20issue[GitHub labels,link=https://github.com/xerial/sqlite-jdbc/labels/good%20first%20issue]
-
-Please read our link:./CONTRIBUTING.md[contribution] guide.
+本项目继承 xerial/sqlite-jdbc 的 Apache License 2.0、Zentus 相关许可和版权声明。xerial 项目名称、历史、API 设计和大量 JDBC 实现归其原作者及贡献者所有。本仓库的 FFM 迁移不代表 xerial 官方已经采用该实现。

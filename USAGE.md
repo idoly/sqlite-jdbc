@@ -1,222 +1,310 @@
-## How to Specify Database Files
+# 使用说明
 
-Here is an example to establishing a connection to a database file `C:\work\mydatabase.db` (in Windows)
+本文档描述 `idoly/sqlite-jdbc` 的 JDK 25 FFM 实现。xerial 官方 Maven Central 版本仍是独立项目，不应将两者的本地库或运行参数混用。
 
-```java
-try (Connection connection = DriverManager.getConnection("jdbc:sqlite:C:/work/mydatabase.db")) { /*...*/ }
-```
+## 环境要求
 
-Opening a UNIX (Linux, maxOS, etc.) file `/home/leo/work/mydatabase.db`
-```java
-try (Connection connection = DriverManager.getConnection("jdbc:sqlite:/home/leo/work/mydatabase.db")) { /*...*/ }
-```
+- JDK 25 或更高版本
+- JDK 25 `java.sql` 提供的最新 JDBC 标准：JDBC 4.3
+- Maven 3.9 或更高版本（仅构建时需要）
+- SQLite 动态库
+- JVM native access 权限
 
-## How to Use Memory or Temporary Databases
-SQLite supports in-memory databases, which do not create any database files. To use a memory database in your Java code, get the database connection as follows:
+本项目不支持 JDBC 3。源码中的 `io.github.idoly.sqlite.internal` 只是从 xerial 继承的内部历史分层，不能据此推断兼容旧 JDBC。应用只应使用标准 `java.sql` / `javax.sql`、`io.github.idoly.sqlite` 和 `io.github.idoly.sqlite.jdbc4`。JDBC 4.3 是当前 JDBC 规范版本；SQLite SQL 语法则由加载的 SQLite 版本决定。
 
-```java
-try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) { /*...*/ }
-```
+## 获取驱动
 
-You can create temporary database as follows:
-```java
-try (Connection connection = DriverManager.getConnection("jdbc:sqlite:")) { /*...*/ }
-```
-
-## How to use Online Backup and Restore Feature
-Take a backup of the whole database to `backup.db` file:
-
-```java
-try (
-    // Create a memory database
-    Connection conn = DriverManager.getConnection("jdbc:sqlite:");
-    Statement stmt = conn.createStatement();
-) {
-    // Do some updates
-    stmt.executeUpdate("create table sample(id, name)");
-    stmt.executeUpdate("insert into sample values(1, \"leo\")");
-    stmt.executeUpdate("insert into sample values(2, \"yui\")");
-    // Dump the database contents to a file
-    stmt.executeUpdate("backup to backup.db");
-}
-```
-
-Restore the database from a backup file:
-```java
-try (
-    // Create a memory database
-    Connection conn = DriverManager.getConnection("jdbc:sqlite:");
-    // Restore the database from a backup file
-    Statement stat = conn.createStatement();
-) {
-    stat.executeUpdate("restore from backup.db");
-}
-```
-
-## Creating BLOB data
-1. Create a table with a column of blob type: `create table T (id integer, data blob)`
-1. Create a prepared statement with `?` symbol: `insert into T values(1, ?)`
-1. Prepare a blob data in byte array (e.g., `byte[] data = ...`)
-1. `preparedStatement.setBytes(1, data)`
-1. `preparedStatement.execute()...`
-
-## Reading Database Files in classpaths or network (read-only)
-To load db files that can be found from the class loader (e.g., db
-files inside a jar file in the classpath),
-use `jdbc:sqlite::resource:` prefix.
-
-For example, here is an example to access an SQLite DB file, `sample.db`
-in a Java package `org.yourdomain`:
-```java
-try (Connection conn = DriverManager.getConnection("jdbc:sqlite::resource:org/yourdomain/sample.db")) { /*...*/ }
-```
-
-In addition, external DB resources can be used as follows:
-```java
-try (Connection conn = DriverManager.getConnection("jdbc:sqlite::resource:http://www.xerial.org/svn/project/XerialJ/trunk/sqlite-jdbc/src/test/java/org/sqlite/sample.db")) { /*...*/ }
-```
-
-To access db files inside some specific jar file (in local or remote),
-use the [JAR URL](http://java.sun.com/j2se/1.5.0/docs/api/java/net/JarURLConnection.html):
-```java
-try (Connection conn = DriverManager.getConnection("jdbc:sqlite::resource:jar:http://www.xerial.org/svn/project/XerialJ/trunk/sqlite-jdbc/src/test/resources/testdb.jar!/sample.db")) { /*...*/ }
-```
-
-DB files will be extracted to a temporary folder specified in `System.getProperty("java.io.tmpdir")`.
-
-## Configure directory to extract native library
-
-sqlite-jdbc extracts its packaged SQLite library below the directory specified by the `java.io.tmpdir` JVM property.
-
-FFM native access must be granted when launching the application:
+当前 FFM 版本从本仓库构建：
 
 ```shell
-java --enable-native-access=ALL-UNNAMED ...
+git clone https://github.com/idoly/sqlite-jdbc.git
+cd sqlite-jdbc
+mvn clean package
 ```
 
-On the module path, grant access to `org.xerial.sqlitejdbc` instead of `ALL-UNNAMED`.
+生成的主 JAR 位于：
 
-## How to use a specific native library
-
-Set `org.sqlite.ffm.lib.path` to the complete path of a custom SQLite library:
-
-```
--Dorg.sqlite.ffm.lib.path=/path/to/your-custom.dll
+```text
+target/sqlite-jdbc-3.53.2.2-SNAPSHOT.jar
 ```
 
-## Override detected architecture
+不要用 xerial 官方的 `org.xerial:sqlite-jdbc` JAR 替代该文件。它不包含本仓库的 FFM 实现，Java 包名也是 `org.sqlite`；本项目使用 `io.github.idoly:sqlite-jdbc` 和 `io.github.idoly.sqlite`。
 
-If the detected architecture is incorrect for your system, thus loading the wrong native library, you can override the value setting the following JVM property:
-```
--Dorg.sqlite.osinfo.architecture=arm
+## 启动参数
+
+类路径：
+
+```shell
+java --enable-native-access=ALL-UNNAMED \
+  -cp "target/sqlite-jdbc-3.53.2.2-SNAPSHOT.jar:slf4j-api.jar:." \
+  Sample
 ```
 
-## Configure Connections
+模块路径：
+
+```shell
+java --enable-native-access=io.github.idoly.sqlitejdbc \
+  --module-path target/sqlite-jdbc-3.53.2.2-SNAPSHOT.jar:slf4j-api.jar \
+  --module your.module/your.Main
+```
+
+Windows 类路径分隔符使用 `;`。
+
+## 建立连接
+
+内存数据库：
+
+```java
+try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+    // 使用 connection
+}
+```
+
+文件数据库：
+
+```java
+try (Connection connection = DriverManager.getConnection("jdbc:sqlite:data/app.db")) {
+    // 使用 connection
+}
+```
+
+只读连接：
+
 ```java
 SQLiteConfig config = new SQLiteConfig();
-// config.setReadOnly(true);
-config.setSharedCache(true);
-config.recursiveTriggers(true);
-// ... other configuration can be set via SQLiteConfig object
-try (Connection conn = DriverManager.getConnection("jdbc:sqlite:sample.db", config.toProperties())) { /*...*/ }
+config.setReadOnly(true);
+try (Connection connection = DriverManager.getConnection(
+        "jdbc:sqlite:data/app.db", config.toProperties())) {
+    // 只读操作
+}
 ```
 
-## How to Use Encrypted Databases
-*__Important: xerial/sqlite-jdbc does not support encryption out of the box, you need a special .dll/.so__*
+URI 参数：
 
-SQLite support encryption of the database via special drivers and a key. To use an encrypted database you need a driver which supports encrypted database via `pragma key` or `pragma hexkey`, e.g. SQLite SSE or SQLCipher. Specify the complete path to that library:
-```
--Dorg.sqlite.ffm.lib.path=/path/to/sqlite_cryption_support.dll
-```
-
-Now the only need to specify the password is via:
 ```java
-try (Connection connection = DriverManager.getConnection("jdbc:sqlite:db.sqlite", "", "password")) { /*...*/ }
+String url = "jdbc:sqlite:data/app.db?foreign_keys=on&busy_timeout=5000";
+try (Connection connection = DriverManager.getConnection(url)) {
+    // 使用 connection
+}
 ```
 
-### Binary Passphrase
-If you need to provide the password in binary form, you have to specify how the provided .dll/.so needs it. There are two different modes available:
+## SQLite 动态库
 
-#### SSE
-The binary password is provided via `pragma hexkey='AE...'`
+驱动按以下顺序查找动态库：
 
-#### SQLCipher
-The binary password is provided via `pragma key="x'AE...'"`
+1. `io.github.idoly.sqlite.ffm.lib.path` 指定的完整路径。
+2. JAR 中当前操作系统和架构对应的资源。
+3. 系统 SQLite。
 
-You set the mode at the connection string level:
+指定完整路径：
+
+```shell
+java --enable-native-access=ALL-UNNAMED \
+  -Dio.github.idoly.sqlite.ffm.lib.path=/opt/sqlite/lib/libsqlite3.so \
+  -cp "sqlite-jdbc.jar:slf4j-api.jar:." \
+  Sample
+```
+
+Windows 示例：
+
+```text
+-Dio.github.idoly.sqlite.ffm.lib.path=C:\sqlite\sqlite3.dll
+```
+
+本项目不支持以下旧参数：
+
+```text
+org.sqlite.lib.path
+org.sqlite.lib.name
+org.sqlite.tmpdir
+```
+
+也不支持 xerial 旧 JNI `libsqlitejdbc` 二进制。自定义库必须导出标准 `sqlite3_*` 符号，并与当前 JVM 的操作系统和 CPU 架构一致。
+
+## Statement 和 PreparedStatement
+
 ```java
-try (Connection connection = DriverManager.getConnection("jdbc:sqlite:db.sqlite?hexkey_mode=sse", "", "AE...")) { /*...*/ }
+try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:");
+        Statement statement = connection.createStatement()) {
+    statement.executeUpdate("create table person(id integer primary key, name text)");
+}
 ```
 
-## Generated keys
-
-SQLite has limited support to retrieve generated keys, using [last_insert_rowid](https://www.sqlite.org/c3ref/last_insert_rowid.html), with the following limitations:
-- a single ID can be retrieved, even if multiple rows were added or updated
-- it needs to be called right after the statement
-
-By default the driver will eagerly retrieve the generated keys after each statement, which may impact performances.
-
-You can disable the retrieval of generated keys in 3 ways:
-- via `SQLiteDataSource#setGetGeneratedKeys(false)`
-- via `SQLiteConnectionConfig#setGetGeneratedKeys(false)`:
-- using the pragma `jdbc.get_generated_keys`:
 ```java
-try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:?jdbc.get_generated_keys=false")) { /*...*/ }
+try (PreparedStatement statement = connection.prepareStatement(
+        "insert into person(id, name) values(?, ?)")) {
+    statement.setLong(1, 1L);
+    statement.setString(2, "Alice");
+    statement.executeUpdate();
+}
 ```
 
-## Explicit read only transactions (use with Hibernate)
+查询：
 
-In order for the driver to be compliant with Hibernate, it needs to allow setting the read only flag after a connection has been created.
+```java
+try (PreparedStatement statement = connection.prepareStatement(
+        "select id, name from person where id >= ?")) {
+    statement.setLong(1, 1L);
+    try (ResultSet result = statement.executeQuery()) {
+        while (result.next()) {
+            long id = result.getLong("id");
+            String name = result.getString("name");
+        }
+    }
+}
+```
 
-SQLite has a notion of "auto-upgrading" read-only transactions to read-write transactions. This can cause `SQLITE_BUSY` exceptions which are difficult to deal with in a JPA/Hibernate/Spring scenario.
+## 事务
 
-For example:
+```java
+connection.setAutoCommit(false);
+try {
+    // 执行多条 SQL
+    connection.commit();
+} catch (SQLException error) {
+    connection.rollback();
+    throw error;
+}
+```
 
-- open connection
-- query data <--- this uses a read-only transaction in SQLite by default
-- write data <--- this is risky as it promotes the transaction to read-write
-- commit
+可通过 `SQLiteConfig#setTransactionMode` 设置事务模式。
 
-The approach taken is:
+## SQLiteConfig
 
-- open transactions on demand
-- allow setting `readOnly` only if no statement has been executed yet
-- if `readOnly(false)` is received, then we _quit_ out of our transaction, and open a new transaction with `BEGIN IMMEDIATE`. This forces a global lock on the database, preventing `SQLITE_BUSY`.
-
-You can activate explicit read only support in 2 ways:
-- via `SQLiteConfig#setExplicitReadOnly(true)`:
 ```java
 SQLiteConfig config = new SQLiteConfig();
-config.setExplicitReadOnly(true);
+config.enforceForeignKeys(true);
+config.setBusyTimeout(5_000);
+config.setSynchronous(SQLiteConfig.SynchronousMode.NORMAL);
+config.setJournalMode(SQLiteConfig.JournalMode.WAL);
+
+try (Connection connection = DriverManager.getConnection(
+        "jdbc:sqlite:data/app.db", config.toProperties())) {
+    // 使用连接
+}
 ```
-- using the pragma `jdbc.explicit_readonly`:
+
+`SQLiteConfig`、`SQLiteDataSource` 和连接池行为继承自 xerial，但类型已迁移到 `io.github.idoly.sqlite` 命名空间。
+
+## 自定义函数
+
+标量函数：
+
 ```java
-try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:?jdbc.explicit_readonly=true")) { /*...*/ }
+Function.create(connection, "add_values", new Function() {
+    @Override
+    protected void xFunc() throws SQLException {
+        result(value_int(0) + value_int(1));
+    }
+});
 ```
 
-## Android
+Aggregate、Window Function、Collation、BusyHandler 和 ProgressHandler 通过迁移到 `io.github.idoly.sqlite` 的 API 注册。底层实现使用 FFM upcall；连接关闭时自动注销 callback 并释放 shared Arena。
 
-This FFM backend does not support Android. It requires JDK 25's `java.lang.foreign` API, which is not provided by the Android runtime. No Android artifact is produced.
+## Backup 和 Restore
 
-## How to load Run-Time Loadable Extensions
-
-### Enable loadable extensions
-
-- If you use `DriverManager`, configure the `Properties`:
+驱动继承 xerial 的 backup/restore 行为，Java API 已迁移到 `io.github.idoly.sqlite`。Backup 支持内存数据库与文件数据库之间复制，并使用 `sqlite3_backup_*` 实现。
 
 ```java
-prop.setProperty("enable_load_extension", "true");
+try (Statement statement = connection.createStatement()) {
+    statement.executeUpdate("backup to backup.db");
+}
 ```
 
-- If you use `SQLiteConfig`:
+恢复：
+
+```java
+try (Statement statement = connection.createStatement()) {
+    statement.executeUpdate("restore from backup.db");
+}
+```
+
+## Serialize 和 Deserialize
+
+支持 SQLite `sqlite3_serialize` / `sqlite3_deserialize`。该能力要求动态库提供对应符号。
+
+## 加载 SQLite 扩展
 
 ```java
 SQLiteConfig config = new SQLiteConfig();
 config.enableLoadExtension(true);
 ```
 
-- You can also specify the pragma in the connection string: `"jdbc:sqlite::memory:?enable_load_extension=true"`
+之后可执行：
 
-### Load an extension
+```sql
+select load_extension('/absolute/path/to/extension');
+```
 
-Use the `load_extension` [SQL function](https://sqlite.org/lang_corefunc.html#load_extension).
+只加载可信扩展。扩展必须与当前 SQLite ABI、操作系统和架构匹配。
+
+## 加密数据库
+
+本项目不内置 SQLCipher 或其他加密实现。需要使用兼容 SQLite 公开 ABI 的自定义动态库：
+
+```shell
+-Dio.github.idoly.sqlite.ffm.lib.path=/absolute/path/to/libsqlcipher.so
+```
+
+是否支持 `PRAGMA key`、`PRAGMA hexkey` 等语法由所选动态库决定。
+
+## 多 classloader
+
+FFM 不受 JNI “同一动态库不能被多个 classloader 重复加载”的限制。驱动测试覆盖多个隔离 classloader；每个 classloader 维护自己的 Java symbol table，底层 SQLite 动态库由系统加载器管理。
+
+## GraalVM native-image
+
+项目提供 FFM reachability metadata，并启用 shared Arena：
+
+```shell
+mvn -Pnative integration-test
+```
+
+使用外部 SQLite 时，在运行 native image 时设置：
+
+```text
+-Dio.github.idoly.sqlite.ffm.lib.path=/absolute/path/to/libsqlite3.so
+```
+
+## Android
+
+不支持 Android。Android Runtime 不提供 JDK 25 `java.lang.foreign`，因此本项目不生成 Android artifact。
+
+## 常见错误
+
+### `IllegalCallerException` 或 native access 警告
+
+缺少：
+
+```text
+--enable-native-access=ALL-UNNAMED
+```
+
+模块路径使用：
+
+```text
+--enable-native-access=io.github.idoly.sqlitejdbc
+```
+
+### `UnsatisfiedLinkError` 或找不到 `sqlite3_*`
+
+检查：
+
+- 动态库路径是否为完整路径；
+- 库架构是否与 JVM 一致；
+- 库是否导出标准 SQLite API；
+- 是否错误使用了 xerial 的旧 JNI `libsqlitejdbc`。
+
+Linux 可检查：
+
+```shell
+nm -D /path/to/libsqlite3.so | grep ' sqlite3_open_v2$'
+```
+
+### 找不到系统 SQLite
+
+显式设置：
+
+```text
+-Dio.github.idoly.sqlite.ffm.lib.path=/absolute/path/to/library
+```

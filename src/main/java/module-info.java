@@ -1,17 +1,16 @@
-module org.xerial.sqlitejdbc {
+module io.github.idoly.sqlitejdbc {
     requires static org.slf4j;
     requires transitive java.sql;
     requires transitive java.sql.rowset;
     requires static org.graalvm.nativeimage;
 
-    exports org.sqlite;
-    exports org.sqlite.core;
-    exports org.sqlite.date;
-    exports org.sqlite.javax;
-    exports org.sqlite.jdbc3;
-    exports org.sqlite.jdbc4;
-    exports org.sqlite.util;
+    exports io.github.idoly.sqlite;
+    exports io.github.idoly.sqlite.core;
+    exports io.github.idoly.sqlite.date;
+    exports io.github.idoly.sqlite.javax;
+    exports io.github.idoly.sqlite.jdbc4;
+    exports io.github.idoly.sqlite.util;
 
     provides java.sql.Driver with
-            org.sqlite.JDBC;
+            io.github.idoly.sqlite.JDBC;
 }

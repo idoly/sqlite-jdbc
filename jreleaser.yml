@@ -1,9 +1,9 @@
 project:
   versionPattern: CUSTOM
-  copyright: Taro L. Saito
+  copyright: idoly and sqlite-jdbc contributors
 release:
   github:
-    owner: xerial
+    owner: idoly
     discussionCategoryName: Announcements
     tagName: '{{projectVersion}}'
     changelog:

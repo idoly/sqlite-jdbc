@@ -128,8 +128,8 @@ $(SQLITE_OUT)/$(LIBNAME): $(SQLITE_HEADER) $(SQLITE_OBJ)
 	$(STRIP) /tmp/$(@F)
 	cp /tmp/$(@F) $@
 
-NATIVE_DIR=src/main/resources/org/sqlite/native/$(OS_NAME)/$(OS_ARCH)
-NATIVE_TARGET_DIR:=$(TARGET)/classes/org/sqlite/native/$(OS_NAME)/$(OS_ARCH)
+NATIVE_DIR=src/main/resources/io/github/idoly/sqlite/native/$(OS_NAME)/$(OS_ARCH)
+NATIVE_TARGET_DIR:=$(TARGET)/classes/io/github/idoly/sqlite/native/$(OS_NAME)/$(OS_ARCH)
 NATIVE_DLL:=$(NATIVE_DIR)/$(LIBNAME)
 
 # For cross-compilation, install docker. See also https://github.com/dockcross/dockcross
@@ -211,10 +211,10 @@ sparcv9:
 	$(MAKE) native OS_NAME=SunOS OS_ARCH=sparcv9
 
 mac64-signed: mac64
-	$(CODESIGN) src/main/resources/org/sqlite/native/Mac/x86_64/libsqlitejdbc.dylib
+	$(CODESIGN) src/main/resources/io/github/idoly/sqlite/native/Mac/x86_64/libsqlitejdbc.dylib
 
 mac-arm64-signed: mac-arm64
-	$(CODESIGN) src/main/resources/org/sqlite/native/Mac/aarch64/libsqlitejdbc.dylib
+	$(CODESIGN) src/main/resources/io/github/idoly/sqlite/native/Mac/aarch64/libsqlitejdbc.dylib
 
 package: native-all
 	rm -rf target/dependency-maven-plugin-markers

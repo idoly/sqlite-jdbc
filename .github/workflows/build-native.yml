@@ -36,7 +36,7 @@ jobs:
 
       # Delete existing libs so we only upload the generated one into the artifact
       - name: Delete existing native libs
-        run: rm -fr src/main/resources/org/sqlite/native
+        run: rm -fr src/main/resources/io/github/idoly/sqlite/native
 
       - name: Build native libraries
         run: make ${{ matrix.target }}
@@ -47,7 +47,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: native-libs-${{ matrix.target }}
-          path: src/main/resources/org/sqlite/native/
+          path: src/main/resources/io/github/idoly/sqlite/native/
 
   push:
     name: Push new native libraries to branch
@@ -61,7 +61,7 @@ jobs:
         with:
           pattern: native-libs-*
           merge-multiple: true
-          path: src/main/resources/org/sqlite/native/
+          path: src/main/resources/io/github/idoly/sqlite/native/
 
       - run: git status
 
