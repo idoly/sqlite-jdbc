@@ -1,67 +1,39 @@
 = SQLite JDBC FFM
-:project-version: 3.53.2.2-SNAPSHOT
+:version: 3.53.2.2-SNAPSHOT
 
-基于 JDK 25 `java.lang.foreign` 的 SQLite JDBC 4.3 驱动。Java 层继承自 https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc]，本地调用已改为直接访问 SQLite `sqlite3_*` C ABI，不包含 JNI 桥。
+JDK 25+ 的 SQLite JDBC 4.3 驱动。底层使用 `java.lang.foreign` 直接调用 SQLite `sqlite3_*` C API，不使用 JNI。
 
-== 范围
+== 项目信息
 
 [cols="1,1"]
 |===
-|项目 |本实现
-
-|JDK
-|25+
-
-|JDBC
-|4.3
-
-|Java 包
-|`io.github.idoly.sqlite`
-
-|Maven 坐标
-|`io.github.idoly:sqlite-jdbc`
-
-|模块名
-|`io.github.idoly.sqlitejdbc`
-
-|JDBC URL
-|`jdbc:sqlite:`
-
-|本地接口
-|JDK FFM
+|Maven 坐标 |`io.github.idoly:sqlite-jdbc`
+|Java 包 |`io.github.idoly.sqlite`
+|JPMS 模块 |`io.github.idoly.sqlitejdbc`
+|JDBC URL |`jdbc:sqlite:`
+|JDK |25+
+|JDBC |4.3
 |===
 
-本项目不兼容 xerial 的 `org.sqlite` API、旧 JDK、Android、JNI、本地 JNI 库或旧加载参数。`org.xerial:sqlite-jdbc` 与本项目不能混用。
+模块只导出 `io.github.idoly.sqlite` 和 `io.github.idoly.sqlite.javax`。驱动实现、FFM 绑定和工具类均为内部代码。
 
 == 构建
 
-需要 JDK 25 和 Maven 3.9+：
+需要 JDK 25 和 Maven：
 
 [source,shell]
 ----
 mvn clean package
 ----
 
-构建只生成一个主产物：
+产物：
 
 [source,text]
 ----
-target/sqlite-jdbc-{project-version}.jar
+target/sqlite-jdbc-{version}.jar
 ----
 
-完整 JVM 测试：
-
-[source,shell]
-----
-mvn test
-----
-
-GraalVM native-image 测试：
-
-[source,shell]
-----
-mvn -Pnative integration-test
-----
+项目只生成一个 JAR。
 
 == 使用
 
@@ -74,63 +46,87 @@ import java.sql.Statement;
 
 try (Connection connection = DriverManager.getConnection("jdbc:sqlite:sample.db");
      Statement statement = connection.createStatement()) {
-    statement.executeUpdate("create table if not exists app_data(id integer primary key, value text)");
-    try (ResultSet rows = statement.executeQuery("select sqlite_version()")) {
-        rows.next();
-        System.out.println(rows.getString(1));
+    statement.executeUpdate("create table if not exists item(id integer primary key, value text)");
+    try (ResultSet result = statement.executeQuery("select sqlite_version()")) {
+        result.next();
+        System.out.println(result.getString(1));
     }
 }
 ----
 
-类路径运行时允许 unnamed module 访问本地代码：
-
-[source,shell]
-----
-java --enable-native-access=ALL-UNNAMED -cp "sqlite-jdbc-{project-version}.jar:app.jar" com.example.Main
-----
-
-模块路径运行时使用模块名：
-
-[source,shell]
-----
-java --enable-native-access=io.github.idoly.sqlitejdbc --module-path sqlite-jdbc-{project-version}.jar:app.jar --module com.example/com.example.Main
-----
-
-== SQLite 动态库
-
-加载顺序：
-
-. `io.github.idoly.sqlite.ffm.lib.path` 指定的绝对路径；
-. JAR 中 `io/github/idoly/sqlite/native/<OS>/<架构>/` 的库；
-. 系统 SQLite 动态库。
+类路径运行：
 
 [source,shell]
 ----
 java --enable-native-access=ALL-UNNAMED \
-  -Dio.github.idoly.sqlite.ffm.lib.path=/opt/sqlite/lib/libsqlite3.so \
-  -cp "sqlite-jdbc-{project-version}.jar:app.jar" com.example.Main
+  -cp "sqlite-jdbc-{version}.jar:app.jar" \
+  com.example.Main
 ----
 
-自定义库必须匹配进程架构并导出驱动使用的 `sqlite3_*` API。Linux 默认查找 `libsqlite3.so.0`，macOS 查找 `libsqlite3.dylib`，Windows 查找 `sqlite3`。
+模块路径运行：
 
-仓库原生库构建：
+[source,shell]
+----
+java --enable-native-access=io.github.idoly.sqlitejdbc \
+  --module-path "sqlite-jdbc-{version}.jar:app.jar" \
+  --module com.example/com.example.Main
+----
+
+== SQLite 库
+
+驱动按以下顺序加载 SQLite：
+
+. JAR 内 `io/github/idoly/sqlite/native/<OS>/<架构>/` 的平台库；
+. 操作系统提供的 SQLite 动态库。
+
+系统库名称为：
+
+* Linux：`libsqlite3.so.0`
+* macOS：`libsqlite3.dylib`
+* Windows：`sqlite3`
+
+没有自定义动态库路径参数。需要指定不同 SQLite 实现时，应通过操作系统的动态库搜索机制提供对应系统库。
+
+构建当前平台的 SQLite 库：
 
 [source,shell]
 ----
 make native
-make native-all
+mvn package
 ----
 
-== 能力
+构建全部平台库需要 Docker 和相应交叉编译工具：
 
-支持连接、事务、Statement、PreparedStatement、ResultSet、元数据、连接池、backup/restore、serialize/deserialize、Function、Collation、BusyHandler、ProgressHandler 和更新/提交/回滚 hook。SQLite SQL 与 PRAGMA 能力由实际加载的 SQLite 版本决定。
+[source,shell]
+----
+make native-all
+mvn package
+----
 
-FFM callback 与连接共享 Arena；关闭连接时先注销 callback，再关闭 SQLite 连接和 Arena。应用不得在连接关闭后调用 SQLite 提供的 callback 地址。
+== API
 
-== 安全
+标准 JDBC 入口为 `DriverManager`、`DataSource` 和 `ConnectionPoolDataSource`。项目还提供：
 
-安全问题请通过 GitHub Security Advisory 私下报告。只加载可信 SQLite 动态库；本项目不验证外部库的签名或来源。
+* `SQLiteConfig` 和 `SQLiteDataSource`
+* `Function`，包括 aggregate 和 window function
+* `Collation`、`BusyHandler`、`ProgressHandler`
+* update、commit 和 rollback listener
+* backup、restore、serialize 和 deserialize
 
-== 许可
+SQL、PRAGMA 和扩展能力由实际加载的 SQLite 库决定。
 
-Java 驱动代码使用 Apache License 2.0。SQLite 为 public domain。继承的 Zentus 代码适用 link:LICENSE.zentus[LICENSE.zentus]，完整归属见 link:NOTICE[NOTICE]。
+== 测试
+
+[source,shell]
+----
+mvn test
+mvn -Pnative integration-test
+----
+
+第二条命令需要带 `native-image` 的 GraalVM JDK 25。
+
+== 来源与许可
+
+JDBC Java 层源自 https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc]，本项目不提供其 `org.sqlite` 包兼容性。
+
+Java 代码使用 Apache License 2.0。SQLite 为 public domain。其他归属见 link:LICENSE.zentus[LICENSE.zentus] 和 link:NOTICE[NOTICE]。

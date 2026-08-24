@@ -1323,12 +1323,6 @@ final class FfmNative {
     }
 
     private static SymbolLookup loadSymbols() {
-        String configuredPath = System.getProperty("io.github.idoly.sqlite.ffm.lib.path");
-        if (configuredPath != null && !configuredPath.isBlank()) {
-            return SymbolLookup.libraryLookup(
-                    Path.of(configuredPath).toAbsolutePath(), LIBRARY_ARENA);
-        }
-
         Optional<Path> packagedLibrary = extractPackagedLibrary();
         return packagedLibrary
                 .<SymbolLookup>map(path -> SymbolLookup.libraryLookup(path, LIBRARY_ARENA))
