@@ -1,6 +1,17 @@
 = SQLite JDBC FFM
 
-JDK 25+ 的 SQLite JDBC 4.3 驱动，使用 FFM 直接调用 SQLite，不使用 JNI。坐标：`io.github.idoly:sqlite-jdbc`。
+JDK 25+ 的 SQLite JDBC 4.3 驱动。
+
+== Dependency
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.github.idoly</groupId>
+    <artifactId>sqlite-jdbc</artifactId>
+    <version>3.53.2.2-SNAPSHOT</version>
+</dependency>
+----
 
 == 构建
 
