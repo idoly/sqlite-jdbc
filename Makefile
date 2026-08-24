@@ -48,49 +48,49 @@ Linux-x86_64_CC := $(CROSS_PREFIX)gcc
 Linux-x86_64_STRIP := $(CROSS_PREFIX)strip
 Linux-x86_64_CCFLAGS := $(COMMON_CCFLAGS) -m64
 Linux-x86_64_LINKFLAGS := $(UNIX_LINKFLAGS)
-Linux-x86_64_LIBNAME := libsqlite3-idoly.so
+Linux-x86_64_LIBNAME := libsqlite3.so
 
 Linux-aarch64_CC := $(CROSS_PREFIX)gcc
 Linux-aarch64_STRIP := $(CROSS_PREFIX)strip
 Linux-aarch64_CCFLAGS := $(COMMON_CCFLAGS)
 Linux-aarch64_LINKFLAGS := $(UNIX_LINKFLAGS)
-Linux-aarch64_LIBNAME := libsqlite3-idoly.so
+Linux-aarch64_LIBNAME := libsqlite3.so
 
 Linux-Musl-x86_64_CC := $(CROSS_PREFIX)gcc
 Linux-Musl-x86_64_STRIP := $(CROSS_PREFIX)strip
 Linux-Musl-x86_64_CCFLAGS := $(COMMON_CCFLAGS) -m64
 Linux-Musl-x86_64_LINKFLAGS := $(UNIX_LINKFLAGS)
-Linux-Musl-x86_64_LIBNAME := libsqlite3-idoly.so
+Linux-Musl-x86_64_LIBNAME := libsqlite3.so
 
 Linux-Musl-aarch64_CC := $(CROSS_PREFIX)gcc
 Linux-Musl-aarch64_STRIP := $(CROSS_PREFIX)strip
 Linux-Musl-aarch64_CCFLAGS := $(COMMON_CCFLAGS)
 Linux-Musl-aarch64_LINKFLAGS := $(UNIX_LINKFLAGS)
-Linux-Musl-aarch64_LIBNAME := libsqlite3-idoly.so
+Linux-Musl-aarch64_LIBNAME := libsqlite3.so
 
 Mac-x86_64_CC := $(CROSS_PREFIX)clang -arch x86_64
 Mac-x86_64_STRIP := $(CROSS_PREFIX)strip -x
 Mac-x86_64_CCFLAGS := $(COMMON_CCFLAGS) -mmacosx-version-min=11
 Mac-x86_64_LINKFLAGS := -dynamiclib -lpthread -lm
-Mac-x86_64_LIBNAME := libsqlite3-idoly.dylib
+Mac-x86_64_LIBNAME := libsqlite3.dylib
 
 Mac-aarch64_CC := $(CROSS_PREFIX)clang
 Mac-aarch64_STRIP := $(CROSS_PREFIX)strip -x
 Mac-aarch64_CCFLAGS := $(COMMON_CCFLAGS) -mmacosx-version-min=11
 Mac-aarch64_LINKFLAGS := -dynamiclib -lpthread -lm
-Mac-aarch64_LIBNAME := libsqlite3-idoly.dylib
+Mac-aarch64_LIBNAME := libsqlite3.dylib
 
 Windows-x86_64_CC := $(CROSS_PREFIX)gcc
 Windows-x86_64_STRIP := $(CROSS_PREFIX)strip
 Windows-x86_64_CCFLAGS := -Os
 Windows-x86_64_LINKFLAGS := -Wl,--kill-at -shared -static-libgcc
-Windows-x86_64_LIBNAME := sqlite3-idoly.dll
+Windows-x86_64_LIBNAME := sqlite3.dll
 
 Windows-aarch64_CC := $(CROSS_PREFIX)clang
 Windows-aarch64_STRIP := $(CROSS_PREFIX)strip
 Windows-aarch64_CCFLAGS := -Os
 Windows-aarch64_LINKFLAGS := -Wl,--kill-at -shared -static-libgcc
-Windows-aarch64_LIBNAME := sqlite3-idoly.dll
+Windows-aarch64_LIBNAME := sqlite3.dll
 
 CC := $($(target)_CC)
 STRIP := $($(target)_STRIP)

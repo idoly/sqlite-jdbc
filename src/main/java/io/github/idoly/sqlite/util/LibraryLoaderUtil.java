@@ -3,7 +3,7 @@ package io.github.idoly.sqlite.util;
 import io.github.idoly.sqlite.SQLiteJDBCLoader;
 
 public final class LibraryLoaderUtil {
-    public static final String NATIVE_LIB_BASE_NAME = "sqlite3-idoly";
+    public static final String NATIVE_LIB_BASE_NAME = "sqlite3";
 
     private LibraryLoaderUtil() {}
 
