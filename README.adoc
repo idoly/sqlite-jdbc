@@ -1,56 +1,33 @@
 = SQLite JDBC FFM
 :version: 3.53.2.2-SNAPSHOT
 
-JDK 25+ 的 SQLite JDBC 4.3 驱动。底层使用 `java.lang.foreign` 直接调用 SQLite `sqlite3_*` C API，不使用 JNI。
+JDK 25+ 的 SQLite JDBC 4.3 驱动，使用 `java.lang.foreign` 直接调用 SQLite `sqlite3_*` C API，不使用 JNI。
 
-== 项目信息
+* Maven：`io.github.idoly:sqlite-jdbc`
+* Java 包：`io.github.idoly.sqlite`
+* JPMS 模块：`io.github.idoly.sqlitejdbc`
+* JDBC URL：`jdbc:sqlite:`
 
-[cols="1,1"]
-|===
-|Maven 坐标 |`io.github.idoly:sqlite-jdbc`
-|Java 包 |`io.github.idoly.sqlite`
-|JPMS 模块 |`io.github.idoly.sqlitejdbc`
-|JDBC URL |`jdbc:sqlite:`
-|JDK |25+
-|JDBC |4.3
-|===
-
-模块只导出 `io.github.idoly.sqlite` 和 `io.github.idoly.sqlite.javax`。驱动实现、FFM 绑定和工具类均为内部代码。
+模块只导出 `io.github.idoly.sqlite` 和 `io.github.idoly.sqlite.javax`。
 
 == 构建
-
-需要 JDK 25 和 Maven：
 
 [source,shell]
 ----
 mvn clean package
 ----
 
-产物：
-
-[source,text]
-----
-target/sqlite-jdbc-{version}.jar
-----
-
-项目只生成一个 JAR。
+项目只生成 `target/sqlite-jdbc-{version}.jar`。
 
 == 使用
 
 [source,java]
 ----
-import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.Statement;
 
-try (Connection connection = DriverManager.getConnection("jdbc:sqlite:sample.db");
-     Statement statement = connection.createStatement()) {
+try (var connection = DriverManager.getConnection("jdbc:sqlite:sample.db");
+     var statement = connection.createStatement()) {
     statement.executeUpdate("create table if not exists item(id integer primary key, value text)");
-    try (ResultSet result = statement.executeQuery("select sqlite_version()")) {
-        result.next();
-        System.out.println(result.getString(1));
-    }
 }
 ----
 
@@ -59,35 +36,20 @@ try (Connection connection = DriverManager.getConnection("jdbc:sqlite:sample.db"
 [source,shell]
 ----
 java --enable-native-access=ALL-UNNAMED \
-  -cp "sqlite-jdbc-{version}.jar:app.jar" \
-  com.example.Main
+  -cp "sqlite-jdbc-{version}.jar:app.jar" com.example.Main
 ----
 
-模块路径运行：
-
-[source,shell]
-----
-java --enable-native-access=io.github.idoly.sqlitejdbc \
-  --module-path "sqlite-jdbc-{version}.jar:app.jar" \
-  --module com.example/com.example.Main
-----
+模块路径运行时，将 native access 目标改为 `io.github.idoly.sqlitejdbc`。
 
 == SQLite 库
 
-驱动按以下顺序加载 SQLite：
-
-. JAR 内 `io/github/idoly/sqlite/native/<OS>/<架构>/` 的平台库；
-. 操作系统提供的 SQLite 动态库。
-
-系统库名称为：
+驱动优先加载 JAR 内 `io/github/idoly/sqlite/native/<OS>/<架构>/` 的平台库，否则加载系统库：
 
 * Linux：`libsqlite3.so.0`
 * macOS：`libsqlite3.dylib`
 * Windows：`sqlite3`
 
-没有自定义动态库路径参数。需要指定不同 SQLite 实现时，应通过操作系统的动态库搜索机制提供对应系统库。
-
-构建当前平台的 SQLite 库：
+项目没有自定义动态库路径参数。构建当前平台库：
 
 [source,shell]
 ----
@@ -95,25 +57,9 @@ make native
 mvn package
 ----
 
-构建全部平台库需要 Docker 和相应交叉编译工具：
+== 功能
 
-[source,shell]
-----
-make native-all
-mvn package
-----
-
-== API
-
-标准 JDBC 入口为 `DriverManager`、`DataSource` 和 `ConnectionPoolDataSource`。项目还提供：
-
-* `SQLiteConfig` 和 `SQLiteDataSource`
-* `Function`，包括 aggregate 和 window function
-* `Collation`、`BusyHandler`、`ProgressHandler`
-* update、commit 和 rollback listener
-* backup、restore、serialize 和 deserialize
-
-SQL、PRAGMA 和扩展能力由实际加载的 SQLite 库决定。
+支持标准 JDBC、数据源和连接池，以及 Function、Collation、BusyHandler、ProgressHandler、事务 hook、backup/restore 和 serialize/deserialize。SQL 与扩展能力由实际加载的 SQLite 库决定。
 
 == 测试
 
@@ -123,10 +69,10 @@ mvn test
 mvn -Pnative integration-test
 ----
 
-第二条命令需要带 `native-image` 的 GraalVM JDK 25。
+native-image 测试需要 GraalVM JDK 25。
 
-== 来源与许可
+== 许可
 
-JDBC Java 层源自 https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc]，本项目不提供其 `org.sqlite` 包兼容性。
+JDBC Java 层源自 https://github.com/xerial/sqlite-jdbc[xerial/sqlite-jdbc]，不兼容其 `org.sqlite` 包。
 
 Java 代码使用 Apache License 2.0。SQLite 为 public domain。其他归属见 link:LICENSE.zentus[LICENSE.zentus] 和 link:NOTICE[NOTICE]。
