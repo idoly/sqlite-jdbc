@@ -48,6 +48,12 @@ public class JDBCTest {
     }
 
     @Test
+    public void parentLoggerIsNotSupported() {
+        assertThatThrownBy(() -> new JDBC().getParentLogger())
+                .isInstanceOf(SQLFeatureNotSupportedException.class);
+    }
+
+    @Test
     public void createConnectionThrowsIfProtocolUnhandled() {
         assertThatExceptionOfType(SQLException.class)
                 .isThrownBy(

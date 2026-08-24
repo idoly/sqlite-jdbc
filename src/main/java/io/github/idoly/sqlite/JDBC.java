@@ -16,21 +16,18 @@
 
 package io.github.idoly.sqlite;
 
-import static java.lang.System.Logger.Level.ERROR;
-
 import io.github.idoly.sqlite.internal.ConnectionImpl;
 import java.sql.*;
 import java.util.Properties;
 
 public class JDBC implements Driver {
-    private static final System.Logger logger = System.getLogger(JDBC.class.getName());
     public static final String PREFIX = "jdbc:sqlite:";
 
     static {
         try {
             DriverManager.registerDriver(new JDBC());
-        } catch (SQLException e) {
-            logger.log(ERROR, "Could not register driver", e);
+        } catch (SQLException error) {
+            throw new ExceptionInInitializerError(error);
         }
     }
 
@@ -56,8 +53,7 @@ public class JDBC implements Driver {
     }
 
     public java.util.logging.Logger getParentLogger() throws SQLFeatureNotSupportedException {
-        // TODO
-        return null;
+        throw new SQLFeatureNotSupportedException("getParentLogger");
     }
 
     /**

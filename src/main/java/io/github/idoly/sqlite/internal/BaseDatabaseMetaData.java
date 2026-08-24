@@ -1,7 +1,5 @@
 package io.github.idoly.sqlite.internal;
 
-import static java.lang.System.Logger.Level.ERROR;
-
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.core.CoreDatabaseMetaData;
 import io.github.idoly.sqlite.core.CoreStatement;
@@ -1248,42 +1246,22 @@ public abstract class BaseDatabaseMetaData extends CoreDatabaseMetaData {
 
         boolean colFound = false;
 
-        ResultSet rs = null;
-        try {
-            // Get all tables implied by the input
-            rs = getTables(c, s, tblNamePattern, null);
+        // Get all tables implied by the input
+        try (ResultSet rs = getTables(c, s, tblNamePattern, null)) {
             while (rs.next()) {
                 String tableName = rs.getString(3);
 
                 boolean isAutoIncrement;
 
-                Statement statColAutoinc = conn.createStatement();
-                ResultSet rsColAutoinc = null;
-                try {
-                    statColAutoinc = conn.createStatement();
-                    rsColAutoinc =
-                            statColAutoinc.executeQuery(
-                                    "SELECT LIKE('%autoincrement%', LOWER(sql)) FROM sqlite_schema "
-                                            + "WHERE LOWER(name) = LOWER('"
-                                            + escape(tableName)
-                                            + "') AND TYPE IN ('table', 'view')");
+                try (Statement statColAutoinc = conn.createStatement();
+                        ResultSet rsColAutoinc =
+                                statColAutoinc.executeQuery(
+                                        "SELECT LIKE('%autoincrement%', LOWER(sql)) FROM sqlite_schema "
+                                                + "WHERE LOWER(name) = LOWER('"
+                                                + escape(tableName)
+                                                + "') AND TYPE IN ('table', 'view')")) {
                     rsColAutoinc.next();
                     isAutoIncrement = rsColAutoinc.getInt(1) == 1;
-                } finally {
-                    if (rsColAutoinc != null) {
-                        try {
-                            rsColAutoinc.close();
-                        } catch (Exception e) {
-                            LogHolder.logger.log(ERROR, "Could not close ResultSet", e);
-                        }
-                    }
-                    if (statColAutoinc != null) {
-                        try {
-                            statColAutoinc.close();
-                        } catch (Exception e) {
-                            LogHolder.logger.log(ERROR, "Could not close statement", e);
-                        }
-                    }
                 }
 
                 // For each table, get the column info and build into overall SQL
@@ -1428,14 +1406,6 @@ public abstract class BaseDatabaseMetaData extends CoreDatabaseMetaData {
                                     .append("'");
                         }
                     }
-                }
-            }
-        } finally {
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (Exception e) {
-                    LogHolder.logger.log(ERROR, "Could not close ResultSet", e);
                 }
             }
         }
@@ -2549,10 +2519,5 @@ public abstract class BaseDatabaseMetaData extends CoreDatabaseMetaData {
             name = name.substring(1, name.length() - 1);
         }
         return name;
-    }
-
-    private static class LogHolder {
-        private static final System.Logger logger =
-                System.getLogger(BaseDatabaseMetaData.class.getName());
     }
 }

@@ -15,12 +15,9 @@
  *--------------------------------------------------------------------------*/
 package io.github.idoly.sqlite;
 
-import static java.lang.System.Logger.Level.ERROR;
-
 import io.github.idoly.sqlite.core.NativeDB;
 import java.io.IOException;
 import java.net.URL;
-import java.text.MessageFormat;
 import java.util.Properties;
 
 /** Initializes the SQLite FFM backend and exposes the driver version. */
@@ -68,13 +65,8 @@ public final class SQLiteJDBCLoader {
                     version = version.trim().replaceAll("[^0-9\\.]", "");
                 }
             } catch (IOException error) {
-                URL failedFile = versionFile;
-                System.getLogger(VersionHolder.class.getName())
-                        .log(
-                                ERROR,
-                                MessageFormat.format(
-                                        "Could not read version from file: {0}", failedFile),
-                                error);
+                throw new IllegalStateException(
+                        "Could not read SQLite JDBC version from " + versionFile, error);
             }
             return version;
         }

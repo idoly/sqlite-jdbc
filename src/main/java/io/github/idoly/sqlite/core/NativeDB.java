@@ -7,8 +7,6 @@
  */
 package io.github.idoly.sqlite.core;
 
-import static java.lang.System.Logger.Level.DEBUG;
-
 import io.github.idoly.sqlite.BusyHandler;
 import io.github.idoly.sqlite.Collation;
 import io.github.idoly.sqlite.Function;
@@ -20,14 +18,12 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
-import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
 /** SQLite backend implemented directly with the JDK Foreign Function and Memory API. */
 public final class NativeDB extends DB {
-    private static final System.Logger logger = System.getLogger(NativeDB.class.getName());
     private static final int DEFAULT_BACKUP_BUSY_SLEEP_TIME_MILLIS = 100;
     private static final int DEFAULT_BACKUP_NUM_BUSY_BEFORE_FAIL = 3;
     private static final int DEFAULT_PAGES_PER_BACKUP_STEP = 100;
@@ -86,12 +82,6 @@ public final class NativeDB extends DB {
 
     @Override
     public synchronized int _exec(String sql) throws SQLException {
-        logger.log(
-                DEBUG,
-                () ->
-                        MessageFormat.format(
-                                "DriverManager [{0}] [SQLite EXEC] {1}",
-                                Thread.currentThread().getName(), sql));
         return FfmNative.execute(databasePointer(), stringToUtf8ByteArray(sql));
     }
 
@@ -130,12 +120,6 @@ public final class NativeDB extends DB {
 
     @Override
     protected synchronized SafeStmtPtr prepare(String sql) throws SQLException {
-        logger.log(
-                DEBUG,
-                () ->
-                        MessageFormat.format(
-                                "DriverManager [{0}] [SQLite EXEC] {1}",
-                                Thread.currentThread().getName(), sql));
         return new SafeStmtPtr(
                 this, FfmNative.prepare(databasePointer(), stringToUtf8ByteArray(sql)));
     }
