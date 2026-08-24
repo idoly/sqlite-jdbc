@@ -235,7 +235,7 @@ win-arm64: $(SQLITE_UNPACKED)
 	OCI_EXE=$(CONTAINER_ENGINE) ./docker/dockcross-windows-arm64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=aarch64-w64-mingw32- OS_NAME=Windows OS_ARCH=aarch64'
 
 linux64: $(SQLITE_UNPACKED)
-	$(MAKE) clean-native native OS_NAME=Linux OS_ARCH=x86_64
+	$(CONTAINER_ENGINE) run $(DOCKER_RUN_OPTS) -v $$PWD:/work -w /work docker.io/almalinux:8 sh -c 'dnf install -y gcc make perl && make clean-native native OS_NAME=Linux OS_ARCH=x86_64'
 
 linux-arm64: $(SQLITE_UNPACKED)
 	OCI_EXE=$(CONTAINER_ENGINE) ./docker/dockcross-arm64-lts -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=aarch64-unknown-linux-gnu- OS_NAME=Linux OS_ARCH=aarch64'
