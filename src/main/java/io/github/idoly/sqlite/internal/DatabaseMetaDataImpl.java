@@ -222,7 +222,7 @@ public final class DatabaseMetaDataImpl implements DatabaseMetaData {
     }
 
     public int getJDBCMinorVersion() {
-        return 3;
+        return Runtime.version().feature() >= 26 ? 5 : 3;
     }
 
     public int getDefaultTransactionIsolation() {

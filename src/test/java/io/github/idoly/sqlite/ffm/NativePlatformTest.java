@@ -53,6 +53,19 @@ class NativePlatformTest {
     }
 
     @Test
+    void packagedLibrariesMatchOfficial64BitPlatforms() {
+        assertThat(hasResource("Linux/x86_64/libsqlite3.so")).isTrue();
+        assertThat(hasResource("Mac/x86_64/libsqlite3.dylib")).isTrue();
+        assertThat(hasResource("Mac/aarch64/libsqlite3.dylib")).isTrue();
+        assertThat(hasResource("Windows/x86_64/sqlite3.dll")).isTrue();
+        assertThat(hasResource("Windows/aarch64/sqlite3.dll")).isTrue();
+
+        assertThat(hasResource("Linux/aarch64/libsqlite3.so")).isFalse();
+        assertThat(hasResource("Linux-Musl/x86_64/libsqlite3.so")).isFalse();
+        assertThat(hasResource("Windows/x86/sqlite3.dll")).isFalse();
+    }
+
+    @Test
     void commandLineOutput() {
         assertThat(captureOutput("--os")).isEqualTo(NativePlatform.getOSName());
         assertThat(captureOutput("--arch")).isEqualTo(NativePlatform.getArchName());
@@ -65,6 +78,10 @@ class NativePlatformTest {
                 "io.github.idoly.sqlite.native.architecture",
                 "custom",
                 () -> assertThat(NativePlatform.getArchName()).isEqualTo("custom"));
+    }
+
+    private static boolean hasResource(String path) {
+        return NativePlatform.class.getResource("/io/github/idoly/sqlite/native/" + path) != null;
     }
 
     private static void assertArchitecture(String input, String expected) {

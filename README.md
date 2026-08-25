@@ -6,10 +6,10 @@
 
 | 项目 | 支持范围 |
 | --- | --- |
-| Java | JDK 25+ |
-| JDBC | JDBC 4.3 |
+| Java | JDK 25+；CI 验证 JDK 25、26 |
+| JDBC | JDK 25：4.3；JDK 26+：4.5 |
 | SQLite | 3.53.4 |
-| Linux | glibc、musl；`x86_64`、`aarch64` |
+| Linux | `x86_64` |
 | macOS | `x86_64`、`aarch64` |
 | Windows | `x86_64`、`aarch64` |
 | JPMS 模块 | `io.github.idoly.sqlite` |

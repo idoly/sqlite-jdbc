@@ -2,6 +2,7 @@ package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.github.idoly.sqlite.SQLiteConfig.JournalMode;
 import io.github.idoly.sqlite.SQLiteConfig.Pragma;
@@ -63,6 +64,41 @@ public class ConnectionTest {
             assertThatThrownBy(() -> conn.unwrap(String.class)).isInstanceOf(SQLException.class);
             assertThatThrownBy(() -> conn.isWrapperFor(null)).isInstanceOf(SQLException.class);
         }
+    }
+
+    @Test
+    public void jdbc45ConnectionQuoting() throws Exception {
+        assumeTrue(Runtime.version().feature() >= 26);
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:")) {
+            assertThat(invokeConnectionMethod(connection, "enquoteLiteral", "G'Day"))
+                    .isEqualTo("'G''Day'");
+            assertThat(invokeConnectionMethod(connection, "enquoteNCharLiteral", "G'Day"))
+                    .isEqualTo("N'G''Day'");
+            assertThat(invokeConnectionMethod(connection, "isSimpleIdentifier", "Hello"))
+                    .isEqualTo(true);
+            assertThat(invokeConnectionMethod(connection, "isSimpleIdentifier", "select"))
+                    .isEqualTo(false);
+            assertThat(
+                            invokeConnectionMethod(
+                                    connection,
+                                    "enquoteIdentifier",
+                                    new Class<?>[] {String.class, boolean.class},
+                                    "G'Day",
+                                    false))
+                    .isEqualTo("\"G'Day\"");
+        }
+    }
+
+    private static Object invokeConnectionMethod(Connection connection, String name, String value)
+            throws Exception {
+        return invokeConnectionMethod(
+                connection, name, new Class<?>[] {String.class}, new Object[] {value});
+    }
+
+    private static Object invokeConnectionMethod(
+            Connection connection, String name, Class<?>[] parameterTypes, Object... arguments)
+            throws Exception {
+        return Connection.class.getMethod(name, parameterTypes).invoke(connection, arguments);
     }
 
     @Test

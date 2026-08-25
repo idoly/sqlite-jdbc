@@ -49,9 +49,9 @@ public class DatabaseMetaDataTest {
     }
 
     @Test
-    public void reportsJDBC43AndSQLiteCapabilities() throws SQLException {
+    public void reportsJDBCVersionAndSQLiteCapabilities() throws SQLException {
         assertThat(meta.getJDBCMajorVersion()).isEqualTo(4);
-        assertThat(meta.getJDBCMinorVersion()).isEqualTo(3);
+        assertThat(meta.getJDBCMinorVersion()).isEqualTo(Runtime.version().feature() >= 26 ? 5 : 3);
         assertThat(meta.nullsAreSortedLow()).isTrue();
         assertThat(meta.nullsAreSortedHigh()).isFalse();
         assertThat(meta.storesMixedCaseQuotedIdentifiers()).isTrue();

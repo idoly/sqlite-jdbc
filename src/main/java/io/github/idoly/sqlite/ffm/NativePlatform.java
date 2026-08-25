@@ -44,7 +44,11 @@ public final class NativePlatform {
         String osName = System.getProperty("os.name", "");
         if (osName.contains("Windows")) return "Windows";
         if (osName.contains("Mac") || osName.contains("Darwin")) return "Mac";
-        if (osName.contains("Linux")) return isMusl() ? "Linux-Musl" : "Linux";
+        if (osName.contains("Linux")) {
+            if (isMusl())
+                throw new IllegalStateException("Unsupported operating system: Linux musl");
+            return "Linux";
+        }
         throw new IllegalStateException("Unsupported operating system: " + osName);
     }
 
