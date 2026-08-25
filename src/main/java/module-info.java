@@ -1,4 +1,4 @@
-module io.github.idoly.sqlitejdbc {
+module io.github.idoly.sqlite {
     requires transitive java.sql;
     requires static java.sql.rowset;
     requires static org.graalvm.nativeimage;

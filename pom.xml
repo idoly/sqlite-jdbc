@@ -5,7 +5,7 @@
 
     <groupId>io.github.idoly</groupId>
     <artifactId>sqlite-jdbc</artifactId>
-    <version>3.53.2.2-SNAPSHOT</version>
+    <version>3.53.4.0-SNAPSHOT</version>
     <name>SQLite JDBC</name>
     <description>JDK 25 FFM SQLite JDBC driver</description>
     <url>https://github.com/idoly/sqlite-jdbc</url>
