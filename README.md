@@ -42,7 +42,3 @@ module path：
 ```shell
 --enable-native-access=io.github.idoly.sqlitejdbc
 ```
-
-## 许可
-
-Java 代码使用 Apache License 2.0，SQLite 为 public domain。第三方归属和许可已合并到 [LICENSE](LICENSE)。

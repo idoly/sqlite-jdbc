@@ -57,13 +57,6 @@
                     <include>sqlite-jdbc.properties</include>
                 </includes>
             </resource>
-            <resource>
-                <directory>${basedir}</directory>
-                <targetPath>META-INF</targetPath>
-                <includes>
-                    <include>LICENSE</include>
-                </includes>
-            </resource>
         </resources>
 
         <plugins>
