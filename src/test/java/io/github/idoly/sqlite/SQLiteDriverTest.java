@@ -233,46 +233,30 @@ public class SQLiteDriverTest {
         final AtomicInteger count = new AtomicInteger();
         List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
+            int worker = i;
             Thread thread =
                     new Thread(
                             () -> {
-                                for (int i1 = 0; i1 < 100; i1++) {
-                                    try {
-                                        try (Connection connection = dataSource.getConnection()) {
-                                            connection.setAutoCommit(false);
-                                            boolean read = Math.random() < 0.5;
-                                            if (read) {
-                                                connection.setReadOnly(true);
-                                                try (Statement statement =
-                                                        connection.createStatement()) {
-                                                    ResultSet rs =
-                                                            statement.executeQuery(
-                                                                    "SELECT * FROM TestTable");
-                                                    rs.close();
-                                                }
-                                            } else {
-                                                try (Statement statement =
-                                                        connection.createStatement()) {
-                                                    try (ResultSet rs =
-                                                            statement.executeQuery(
-                                                                    "SELECT * FROM TestTable")) {
-                                                        while (rs.next()) {
-                                                            int id = rs.getInt("ID");
-                                                            int value = rs.getInt("testval");
-                                                            count.incrementAndGet();
-                                                            statement.executeUpdate(
-                                                                    "UPDATE TestTable SET testval = "
-                                                                            + (value + 1)
-                                                                            + " WHERE ID = "
-                                                                            + id);
-                                                        }
-                                                    }
-                                                }
-                                                connection.commit();
+                                for (int iteration = 0; iteration < 100; iteration++) {
+                                    boolean read = ((worker + iteration) & 1) == 0;
+                                    for (int attempt = 0; ; attempt++) {
+                                        try {
+                                            runHammerOperation(dataSource, read, count);
+                                            break;
+                                        } catch (SQLException error) {
+                                            if (!isTransientLock(error) || attempt == 4) {
+                                                throw new RuntimeException(
+                                                        "Worker failed: " + error.getMessage(),
+                                                        error);
+                                            }
+                                            try {
+                                                Thread.sleep(10L << attempt);
+                                            } catch (InterruptedException interrupted) {
+                                                Thread.currentThread().interrupt();
+                                                throw new RuntimeException(
+                                                        "Worker interrupted", interrupted);
                                             }
                                         }
-                                    } catch (SQLException e) {
-                                        throw new RuntimeException("Worker failed", e);
                                     }
                                 }
                             });
@@ -300,6 +284,40 @@ public class SQLiteDriverTest {
             }
             connection2.commit();
         }
+    }
+
+    private static void runHammerOperation(
+            SQLiteDataSource dataSource, boolean read, AtomicInteger count) throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            if (read) {
+                connection.setReadOnly(true);
+                try (Statement statement = connection.createStatement();
+                        ResultSet resultSet = statement.executeQuery("SELECT * FROM TestTable")) {
+                    while (resultSet.next()) {
+                        resultSet.getInt("testval");
+                    }
+                }
+                return;
+            }
+
+            try (Statement statement = connection.createStatement();
+                    ResultSet resultSet = statement.executeQuery("SELECT * FROM TestTable")) {
+                while (resultSet.next()) {
+                    int id = resultSet.getInt("ID");
+                    int value = resultSet.getInt("testval");
+                    statement.executeUpdate(
+                            "UPDATE TestTable SET testval = " + (value + 1) + " WHERE ID = " + id);
+                }
+            }
+            connection.commit();
+            count.incrementAndGet();
+        }
+    }
+
+    private static boolean isTransientLock(SQLException error) {
+        int primaryCode = error.getErrorCode() & 0xFF;
+        return primaryCode == 5 || primaryCode == 6;
     }
 
     // helper methods -----------------------------------------------------------------
