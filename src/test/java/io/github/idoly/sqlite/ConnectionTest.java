@@ -68,7 +68,7 @@ public class ConnectionTest {
     @Test
     public void sqliteLimitsCanBeReadAndChanged() throws SQLException {
         try (SQLiteConnection connection =
-                JDBC.createConnection("jdbc:sqlite:", new Properties())) {
+                SQLiteDriver.createConnection("jdbc:sqlite:", new Properties())) {
             connection.setLimit(SQLiteLimits.SQLITE_LIMIT_COLUMN, 100);
             assertThat(connection.getLimit(SQLiteLimits.SQLITE_LIMIT_COLUMN)).isEqualTo(100);
             assertThatThrownBy(() -> connection.setLimit(null, 1)).isInstanceOf(SQLException.class);

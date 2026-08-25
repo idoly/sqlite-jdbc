@@ -1,6 +1,6 @@
 package io.github.idoly.sqlite.core;
 
-public interface Codes {
+public interface SQLiteResultCodes {
     /** Successful result */
     public static final int SQLITE_OK = 0;
 

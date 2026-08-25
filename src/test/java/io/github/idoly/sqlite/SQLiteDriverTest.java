@@ -1,7 +1,7 @@
 // --------------------------------------
 // sqlite-jdbc Project
 //
-// JDBCTest.java
+// SQLiteDriverTest.java
 // Since: Apr 8, 2009
 //
 // $URL$
@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-public class JDBCTest {
+public class SQLiteDriverTest {
     @Test
     public void enableLoadExtensionTest() throws Exception {
         Properties prop = new Properties();
@@ -49,7 +49,7 @@ public class JDBCTest {
 
     @Test
     public void parentLoggerIsNotSupported() {
-        assertThatThrownBy(() -> new JDBC().getParentLogger())
+        assertThatThrownBy(() -> new SQLiteDriver().getParentLogger())
                 .isInstanceOf(SQLFeatureNotSupportedException.class);
     }
 
@@ -57,26 +57,30 @@ public class JDBCTest {
     public void createConnectionThrowsIfProtocolUnhandled() {
         assertThatExceptionOfType(SQLException.class)
                 .isThrownBy(
-                        () -> JDBC.createConnection("jdbc:anotherpopulardatabaseprotocol:", null))
+                        () ->
+                                SQLiteDriver.createConnection(
+                                        "jdbc:anotherpopulardatabaseprotocol:", null))
                 .withMessageContaining("invalid database address");
     }
 
     @Test
     public void driverConnectReturnsNullIfProtocolUnhandled() throws Exception {
-        assertThat(new JDBC().connect("jdbc:anotherpopulardatabaseprotocol:", null)).isNull();
-        assertThat(new JDBC().connect("jdbc:wrongprotocol:test.db", new Properties())).isNull();
+        assertThat(new SQLiteDriver().connect("jdbc:anotherpopulardatabaseprotocol:", null))
+                .isNull();
+        assertThat(new SQLiteDriver().connect("jdbc:wrongprotocol:test.db", new Properties()))
+                .isNull();
     }
 
     @Test
     public void createConnectionThrowsOnNullUrl() {
         assertThatExceptionOfType(SQLException.class)
-                .isThrownBy(() -> JDBC.createConnection(null, null))
+                .isThrownBy(() -> SQLiteDriver.createConnection(null, null))
                 .withMessageContaining("invalid database address");
     }
 
     @Test
     public void createConnectionAcceptsValidSqliteUrl() throws Exception {
-        try (Connection conn = JDBC.createConnection("jdbc:sqlite:", new Properties())) {
+        try (Connection conn = SQLiteDriver.createConnection("jdbc:sqlite:", new Properties())) {
             assertThat(conn).isNotNull();
             assertThat(conn.isClosed()).isFalse();
         }
@@ -151,11 +155,11 @@ public class JDBCTest {
 
     @Test
     public void canSetJdbcConnectionToReadOnlyAfterRollback() throws Exception {
-        System.out.println("Creating JDBC Datasource");
+        System.out.println("Creating JDBC DataSource");
         SQLiteDataSource dataSource = createDatasourceWithExplicitReadonly();
-        System.out.println("Creating JDBC Connection");
+        System.out.println("Creating JDBC connection");
         try (Connection connection = dataSource.getConnection()) {
-            System.out.println("JDBC Connection created");
+            System.out.println("JDBC connection created");
             System.out.println("Disabling auto-commit");
             connection.setAutoCommit(false);
             System.out.println("Creating statement");
@@ -196,7 +200,7 @@ public class JDBCTest {
             // execute a statement
             try (Statement statement = connection.createStatement()) {
                 assertThatExceptionOfType(SQLException.class)
-                        .as("Managed to modify DB contents on a read-only connection!")
+                        .as("Managed to modify database contents on a read-only connection!")
                         .isThrownBy(
                                 () ->
                                         statement.execute(

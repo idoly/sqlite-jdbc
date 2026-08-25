@@ -83,7 +83,7 @@ public class SQLiteConfig {
      * @return The connection.
      */
     public Connection createConnection(String url) throws SQLException {
-        return JDBC.createConnection(url, toProperties());
+        return SQLiteDriver.createConnection(url, toProperties());
     }
 
     /**
@@ -1083,7 +1083,7 @@ public class SQLiteConfig {
     }
 
     /**
-     * @param milliseconds Connect to DB timeout in milliseconds
+     * @param milliseconds Database connection timeout in milliseconds
      */
     public void setBusyTimeout(int milliseconds) {
         setPragma(Pragma.BUSY_TIMEOUT, Integer.toString(milliseconds));

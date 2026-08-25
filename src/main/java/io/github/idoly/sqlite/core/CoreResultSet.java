@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** Implements a JDBC ResultSet. */
-public abstract class CoreResultSet implements Codes {
+public abstract class CoreResultSet implements SQLiteResultCodes {
     protected final CoreStatement stmt;
 
     /** If the result set does not have any rows. */
@@ -52,7 +52,7 @@ public abstract class CoreResultSet implements Codes {
 
     // INTERNAL FUNCTIONS ///////////////////////////////////////////
 
-    protected DB getDatabase() {
+    protected SQLiteDatabase getDatabase() {
         return stmt.getDatabase();
     }
 
@@ -107,7 +107,7 @@ public abstract class CoreResultSet implements Codes {
     public void checkMeta() throws SQLException {
         checkCol(1);
         if (meta == null) {
-            meta = stmt.pointer.safeRun(DB::column_metadata);
+            meta = stmt.pointer.safeRun(SQLiteDatabase::column_metadata);
         }
     }
 
@@ -126,10 +126,10 @@ public abstract class CoreResultSet implements Codes {
             return;
         }
 
-        DB db = stmt.getDatabase();
+        SQLiteDatabase db = stmt.getDatabase();
         synchronized (db) {
             if (!stmt.pointer.isClosed()) {
-                stmt.pointer.safeRunInt(DB::reset);
+                stmt.pointer.safeRunInt(SQLiteDatabase::reset);
 
                 if (closeStmt) {
                     closeStmt = false; // break recursive call

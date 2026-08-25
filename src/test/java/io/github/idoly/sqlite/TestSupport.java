@@ -9,7 +9,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Utils {
+public class TestSupport {
     public static List<String> getCompileOptions(Connection conn) throws SQLException {
         List<String> compileOptions = new ArrayList<>();
         try (Statement stat = conn.createStatement()) {

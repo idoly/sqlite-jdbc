@@ -7,5 +7,5 @@ module io.github.idoly.sqlitejdbc {
     exports io.github.idoly.sqlite.datasource;
 
     provides java.sql.Driver with
-            io.github.idoly.sqlite.JDBC;
+            io.github.idoly.sqlite.SQLiteDriver;
 }

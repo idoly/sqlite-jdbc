@@ -2,7 +2,7 @@ package io.github.idoly.sqlite.internal;
 
 import io.github.idoly.sqlite.core.CoreResultSet;
 import io.github.idoly.sqlite.core.CoreStatement;
-import io.github.idoly.sqlite.core.DB;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.Reader;
@@ -69,7 +69,7 @@ public abstract class BaseResultSet extends CoreResultSet {
         }
 
         // do the real work
-        int statusCode = stmt.pointer.safeRunInt(DB::step);
+        int statusCode = stmt.pointer.safeRunInt(SQLiteDatabase::step);
         switch (statusCode) {
             case SQLITE_DONE:
                 pastLastRow = true;

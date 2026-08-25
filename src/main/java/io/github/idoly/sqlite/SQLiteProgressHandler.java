@@ -4,7 +4,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 /** https://www.sqlite.org/c3ref/progress_handler.html */
-public abstract class ProgressHandler {
+public abstract class SQLiteProgressHandler {
     /**
      * Sets a progress handler for the connection.
      *
@@ -14,7 +14,7 @@ public abstract class ProgressHandler {
      * @param handler the progressHandler
      */
     public static void setHandler(
-            Connection connection, int virtualMachineCalls, ProgressHandler handler)
+            Connection connection, int virtualMachineCalls, SQLiteProgressHandler handler)
             throws SQLException {
         SQLiteConnection sqliteConnection = requireSQLiteConnection(connection);
         if (handler == null) {

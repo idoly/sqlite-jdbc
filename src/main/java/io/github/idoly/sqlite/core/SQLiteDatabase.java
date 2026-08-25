@@ -1,13 +1,13 @@
 package io.github.idoly.sqlite.core;
 
-import io.github.idoly.sqlite.BusyHandler;
-import io.github.idoly.sqlite.Collation;
-import io.github.idoly.sqlite.Function;
-import io.github.idoly.sqlite.ProgressHandler;
+import io.github.idoly.sqlite.SQLiteBusyHandler;
+import io.github.idoly.sqlite.SQLiteCollation;
 import io.github.idoly.sqlite.SQLiteCommitListener;
 import io.github.idoly.sqlite.SQLiteConfig;
 import io.github.idoly.sqlite.SQLiteErrorCode;
 import io.github.idoly.sqlite.SQLiteException;
+import io.github.idoly.sqlite.SQLiteFunction;
+import io.github.idoly.sqlite.SQLiteProgressHandler;
 import io.github.idoly.sqlite.SQLiteUpdateListener;
 import java.sql.BatchUpdateException;
 import java.sql.SQLException;
@@ -24,29 +24,29 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * differences between the JDBC specification and the SQLite C API.
  *
  * The process of moving SQLite weirdness into this class is incomplete.
- * You'll still find lots of code in Stmt and PrepStmt that are doing
- * implicit contract conversions. Sorry.
+ * Some statement and prepared-statement implementations still perform
+ * implicit contract conversions.
  *
- * The subclass, NativeDB, provides the actual access to SQLite functions.
+ * The subclass, FfmDatabase, provides the actual access to SQLite functions.
  */
-public abstract class DB implements Codes {
+public abstract class SQLiteDatabase implements SQLiteResultCodes {
     private final String url;
     private final String fileName;
     private final SQLiteConfig config;
     private final AtomicBoolean closed = new AtomicBoolean(true);
 
     /** The "begin;"and "commit;" statement handles. */
-    volatile SafeStmtPtr begin;
+    volatile StatementHandle begin;
 
-    volatile SafeStmtPtr commit;
+    volatile StatementHandle commit;
 
     /** Tracer for statements to avoid unfinalized statements on db close. */
-    private final Set<SafeStmtPtr> stmts = ConcurrentHashMap.newKeySet();
+    private final Set<StatementHandle> stmts = ConcurrentHashMap.newKeySet();
 
     private final Set<SQLiteUpdateListener> updateListeners = new HashSet<>();
     private final Set<SQLiteCommitListener> commitListeners = new HashSet<>();
 
-    public DB(String url, String fileName, SQLiteConfig config) throws SQLException {
+    public SQLiteDatabase(String url, String fileName, SQLiteConfig config) throws SQLException {
         this.url = url;
         this.fileName = fileName;
         this.config = config;
@@ -91,7 +91,7 @@ public abstract class DB implements Codes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/busy_handler.html">https://www.sqlite.org/c3ref/busy_timeout.html</a>
      */
-    public abstract void busy_handler(BusyHandler busyHandler) throws SQLException;
+    public abstract void busy_handler(SQLiteBusyHandler busyHandler) throws SQLException;
 
     /**
      * Return English-language text that describes the error as either UTF-8 or UTF-16.
@@ -134,7 +134,7 @@ public abstract class DB implements Codes {
      * connections to the same database.
      *
      * @param enable True to enable; false otherwise.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/enable_shared_cache.html">https://www.sqlite.org/c3ref/enable_shared_cache.html</a>
      * @see io.github.idoly.sqlite.SQLiteErrorCode
@@ -145,7 +145,7 @@ public abstract class DB implements Codes {
      * Enables or disables loading of SQLite extensions.
      *
      * @param enable True to enable; false otherwise.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/load_extension.html">https://www.sqlite.org/c3ref/load_extension.html</a>
      */
@@ -160,9 +160,9 @@ public abstract class DB implements Codes {
      *     href="https://www.sqlite.org/c3ref/exec.html">https://www.sqlite.org/c3ref/exec.html</a>
      */
     public final synchronized void exec(String sql, boolean autoCommit) throws SQLException {
-        SafeStmtPtr pointer = prepare(sql);
+        StatementHandle pointer = prepare(sql);
         try {
-            int rc = pointer.safeRunInt(DB::step);
+            int rc = pointer.safeRunInt(SQLiteDatabase::step);
             switch (rc) {
                 case SQLITE_DONE:
                     ensureAutoCommit(autoCommit);
@@ -207,7 +207,7 @@ public abstract class DB implements Codes {
      */
     public final synchronized void close() throws SQLException {
         // finalize any remaining statements before closing db
-        for (SafeStmtPtr element : stmts) {
+        for (StatementHandle element : stmts) {
             element.close();
         }
 
@@ -245,12 +245,12 @@ public abstract class DB implements Codes {
      *
      * @param safePtr the pointer wrapper to remove from internal structures
      * @param ptr the raw pointer to free
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @throws SQLException if finalization fails
      * @see <a
      *     href="https://www.sqlite.org/c3ref/finalize.html">https://www.sqlite.org/c3ref/finalize.html</a>
      */
-    public synchronized int finalize(SafeStmtPtr safePtr, long ptr) throws SQLException {
+    public synchronized int finalize(StatementHandle safePtr, long ptr) throws SQLException {
         try {
             return finalize(ptr);
         } finally {
@@ -281,7 +281,7 @@ public abstract class DB implements Codes {
      * Complies, evaluates, executes and commits an SQL statement.
      *
      * @param sql An SQL statement.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/exec.html">https://www.sqlite.org/c3ref/exec.html</a>
      */
@@ -291,17 +291,17 @@ public abstract class DB implements Codes {
      * Complies an SQL statement.
      *
      * @param sql An SQL statement.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/prepare.html">https://www.sqlite.org/c3ref/prepare.html</a>
      */
-    protected abstract SafeStmtPtr prepare(String sql) throws SQLException;
+    protected abstract StatementHandle prepare(String sql) throws SQLException;
 
     /**
      * Destroys a prepared statement.
      *
      * @param stmt Pointer to the statement pointer.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/finalize.html">https://www.sqlite.org/c3ref/finalize.html</a>
      */
@@ -311,7 +311,7 @@ public abstract class DB implements Codes {
      * Evaluates a statement.
      *
      * @param stmt Pointer to the statement.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/step.html">https://www.sqlite.org/c3ref/step.html</a>
      */
@@ -321,7 +321,7 @@ public abstract class DB implements Codes {
      * Sets a prepared statement object back to its initial state, ready to be re-executed.
      *
      * @param stmt Pointer to the statement.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/reset.html">https://www.sqlite.org/c3ref/reset.html</a>
      */
@@ -433,7 +433,7 @@ public abstract class DB implements Codes {
      *
      * @param stmt Pointer to the statement.
      * @param pos The index of the SQL parameter to be set to NULL.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      */
     abstract int bind_null(long stmt, int pos) throws SQLException;
 
@@ -444,7 +444,7 @@ public abstract class DB implements Codes {
      * @param stmt Pointer to the statement.
      * @param pos The index of the SQL parameter to be set.
      * @param v Value to bind to the parameter.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
@@ -457,7 +457,7 @@ public abstract class DB implements Codes {
      * @param stmt Pointer to the statement.
      * @param pos The index of the SQL parameter to be set.
      * @param v Value to bind to the parameter.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
@@ -470,7 +470,7 @@ public abstract class DB implements Codes {
      * @param stmt Pointer to the statement.
      * @param pos Index of the SQL parameter to be set.
      * @param v Value to bind to the parameter.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
@@ -483,7 +483,7 @@ public abstract class DB implements Codes {
      * @param stmt Pointer to the statement.
      * @param pos Index of the SQL parameter to be set.
      * @param v value to bind to the parameter.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
@@ -496,7 +496,7 @@ public abstract class DB implements Codes {
      * @param stmt Pointer to the statement.
      * @param pos Index of the SQL parameter to be set.
      * @param v Value to bind to the parameter.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
@@ -584,7 +584,7 @@ public abstract class DB implements Codes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/value_blob.html">https://www.sqlite.org/c3ref/value_blob.html</a>
      */
-    public abstract String value_text(Function f, int arg) throws SQLException;
+    public abstract String value_text(SQLiteFunction f, int arg) throws SQLException;
 
     /**
      * @param f SQLite function object.
@@ -593,7 +593,7 @@ public abstract class DB implements Codes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/value_blob.html">https://www.sqlite.org/c3ref/value_blob.html</a>
      */
-    public abstract byte[] value_blob(Function f, int arg) throws SQLException;
+    public abstract byte[] value_blob(SQLiteFunction f, int arg) throws SQLException;
 
     /**
      * @param f SQLite function object.
@@ -602,7 +602,7 @@ public abstract class DB implements Codes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/value_blob.html">https://www.sqlite.org/c3ref/value_blob.html</a>
      */
-    public abstract double value_double(Function f, int arg) throws SQLException;
+    public abstract double value_double(SQLiteFunction f, int arg) throws SQLException;
 
     /**
      * @param f SQLite function object.
@@ -611,7 +611,7 @@ public abstract class DB implements Codes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/value_blob.html">https://www.sqlite.org/c3ref/value_blob.html</a>
      */
-    public abstract long value_long(Function f, int arg) throws SQLException;
+    public abstract long value_long(SQLiteFunction f, int arg) throws SQLException;
 
     /**
      * Accesses the parameter values on the function or aggregate in int data type with the function
@@ -623,7 +623,7 @@ public abstract class DB implements Codes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/value_blob.html">https://www.sqlite.org/c3ref/value_blob.html</a>
      */
-    public abstract int value_int(Function f, int arg) throws SQLException;
+    public abstract int value_int(SQLiteFunction f, int arg) throws SQLException;
 
     /**
      * @param f SQLite function object.
@@ -632,7 +632,7 @@ public abstract class DB implements Codes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/value_blob.html">https://www.sqlite.org/c3ref/value_blob.html</a>
      */
-    public abstract int value_type(Function f, int arg) throws SQLException;
+    public abstract int value_type(SQLiteFunction f, int arg) throws SQLException;
 
     /**
      * Create a user defined function with given function name and the function object.
@@ -640,12 +640,12 @@ public abstract class DB implements Codes {
      * @param name The function name to be created.
      * @param f SQLite function object.
      * @param flags Extra flags to use when creating the function, such as {@link
-     *     Function#FLAG_DETERMINISTIC}
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     *     SQLiteFunction#FLAG_DETERMINISTIC}
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/create_function.html">https://www.sqlite.org/c3ref/create_function.html</a>
      */
-    public abstract int create_function(String name, Function f, int nArgs, int flags)
+    public abstract int create_function(String name, SQLiteFunction f, int nArgs, int flags)
             throws SQLException;
 
     /**
@@ -653,7 +653,7 @@ public abstract class DB implements Codes {
      *
      * @param name Name of the function to deregister.
      * @param nArgs Number of function arguments, or -1 for a variadic function.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      */
     public abstract int destroy_function(String name, int nArgs) throws SQLException;
 
@@ -662,17 +662,17 @@ public abstract class DB implements Codes {
      *
      * @param name The collation name to be created.
      * @param c SQLite collation object.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/create_collation.html">https://www.sqlite.org/c3ref/create_collation.html</a>
      */
-    public abstract int create_collation(String name, Collation c) throws SQLException;
+    public abstract int create_collation(String name, SQLiteCollation c) throws SQLException;
 
     /**
      * Create a user defined collation with given collation name and the collation object.
      *
      * @param name The collation name to be created.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      */
     public abstract int destroy_collation(String name) throws SQLException;
 
@@ -680,7 +680,7 @@ public abstract class DB implements Codes {
      * @param dbName Database name to be backed up.
      * @param destFileName Target backup file name.
      * @param observer ProgressObserver object.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      */
     public abstract int backup(String dbName, String destFileName, ProgressObserver observer)
             throws SQLException;
@@ -694,8 +694,8 @@ public abstract class DB implements Codes {
      * @param nTimeouts the number of times sqlite3_backup_step can return SQLITE_BUSY before
      *     failing
      * @param pagesPerStep the number of pages to copy in each sqlite3_backup_step. If this is
-     *     negative, the entire DB is copied at once.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     *     negative, the entire database is copied at once.
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      */
     public abstract int backup(
             String dbName,
@@ -710,7 +710,7 @@ public abstract class DB implements Codes {
      * @param dbName Database name for restoring data.
      * @param sourceFileName Source file name.
      * @param observer ProgressObserver object.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      */
     public abstract int restore(String dbName, String sourceFileName, ProgressObserver observer)
             throws SQLException;
@@ -724,8 +724,8 @@ public abstract class DB implements Codes {
      * @param nTimeouts the number of times sqlite3_backup_step can return SQLITE_BUSY before
      *     failing
      * @param pagesPerStep the number of pages to copy in each sqlite3_backup_step. If this is
-     *     negative, the entire DB is copied at once.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     *     negative, the entire database is copied at once.
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      */
     public abstract int restore(
             String dbName,
@@ -750,8 +750,8 @@ public abstract class DB implements Codes {
     }
 
     /** Progress handler */
-    public abstract void register_progress_handler(int vmCalls, ProgressHandler progressHandler)
-            throws SQLException;
+    public abstract void register_progress_handler(
+            int vmCalls, SQLiteProgressHandler progressHandler) throws SQLException;
 
     public abstract void clear_progress_handler() throws SQLException;
 
@@ -789,7 +789,7 @@ public abstract class DB implements Codes {
      * @param stmt Pointer to the statement.
      * @param pos Index of the SQL parameter to be set to NULL.
      * @param v Value to bind to the parameter.
-     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result Codes</a>
+     * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
@@ -828,7 +828,8 @@ public abstract class DB implements Codes {
      * @throws SQLException if statement is not open or is being used elsewhere
      */
     final synchronized long[] executeBatch(
-            SafeStmtPtr stmt, int count, Object[] vals, boolean autoCommit) throws SQLException {
+            StatementHandle stmt, int count, Object[] vals, boolean autoCommit)
+            throws SQLException {
         return stmt.safeRun((db, ptr) -> this.executeBatch(ptr, count, vals, autoCommit));
     }
 
@@ -971,7 +972,7 @@ public abstract class DB implements Codes {
             }
         } finally {
             if (!stmt.pointer.isClosed()) {
-                stmt.pointer.safeRunInt(DB::reset);
+                stmt.pointer.safeRunInt(SQLiteDatabase::reset);
             }
         }
         return changes();
@@ -1103,9 +1104,9 @@ public abstract class DB implements Codes {
 
     /**
      * SQLite and the JDBC API have very different ideas about the meaning of auto-commit. Under
-     * JDBC, when executeUpdate() returns in auto-commit mode (the default), the programmer assumes
-     * the data has been written to disk. In SQLite however, a call to sqlite3_step() with an INSERT
-     * statement can return SQLITE_OK, and yet the data is still in limbo.
+     * SQLiteDriver, when executeUpdate() returns in auto-commit mode (the default), the programmer
+     * assumes the data has been written to disk. In SQLite however, a call to sqlite3_step() with
+     * an INSERT statement can return SQLITE_OK, and yet the data is still in limbo.
      *
      * <p>This limbo appears when another statement on the database is active, e.g. a SELECT. SQLite
      * auto-commit waits until the final read statement finishes, and then writes whatever updates

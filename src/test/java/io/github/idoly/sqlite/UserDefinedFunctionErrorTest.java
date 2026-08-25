@@ -11,7 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** Tests User Defined Functions. */
-public class UDFCustomErrorTest {
+public class UserDefinedFunctionErrorTest {
     private Connection conn;
     private Statement stat;
 
@@ -29,10 +29,10 @@ public class UDFCustomErrorTest {
 
     @Test
     public void customErr() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f9",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         throw new SQLException("myErr");

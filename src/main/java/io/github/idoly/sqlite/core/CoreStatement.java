@@ -9,11 +9,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.regex.Pattern;
 
-public abstract class CoreStatement implements Codes {
+public abstract class CoreStatement implements SQLiteResultCodes {
     public final SQLiteConnection conn;
     protected final CoreResultSet rs;
 
-    public SafeStmtPtr pointer;
+    public StatementHandle pointer;
     protected String sql = null;
 
     protected int batchPos;
@@ -35,7 +35,7 @@ public abstract class CoreStatement implements Codes {
         rs = new ResultSetImpl(this);
     }
 
-    public DB getDatabase() {
+    public SQLiteDatabase getDatabase() {
         return conn.getDatabase();
     }
 
@@ -84,7 +84,7 @@ public abstract class CoreStatement implements Codes {
             }
         }
 
-        return pointer.safeRunInt(DB::column_count) != 0;
+        return pointer.safeRunInt(SQLiteDatabase::column_count) != 0;
     }
 
     /**
@@ -116,12 +116,13 @@ public abstract class CoreStatement implements Codes {
             }
         }
 
-        return pointer.safeRunInt(DB::column_count) != 0;
+        return pointer.safeRunInt(SQLiteDatabase::column_count) != 0;
     }
 
     protected void internalClose() throws SQLException {
         if (this.pointer != null && !this.pointer.isClosed()) {
-            if (conn.isClosed()) throw DB.newSQLException(SQLITE_ERROR, "Connection is closed");
+            if (conn.isClosed())
+                throw SQLiteDatabase.newSQLException(SQLITE_ERROR, "Connection is closed");
 
             rs.close();
 
@@ -160,11 +161,11 @@ public abstract class CoreStatement implements Codes {
     }
 
     /**
-     * SQLite's last_insert_rowid() function is DB-specific. However, in this implementation we
-     * ensure the Generated Key result set is statement-specific by executing the query immediately
-     * after an insert operation is performed. The caller is simply responsible for calling
-     * updateGeneratedKeys on the statement object right after execute in a synchronized(connection)
-     * block.
+     * SQLite's last_insert_rowid() function is SQLiteDatabase-specific. However, in this
+     * implementation we ensure the Generated Key result set is statement-specific by executing the
+     * query immediately after an insert operation is performed. The caller is simply responsible
+     * for calling updateGeneratedKeys on the statement object right after execute in a
+     * synchronized(connection) block.
      */
     public void updateGeneratedKeys() throws SQLException {
         if (conn.getConnectionConfig().isGetGeneratedKeys()) {

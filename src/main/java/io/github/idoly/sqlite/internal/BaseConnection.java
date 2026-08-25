@@ -53,7 +53,7 @@ public abstract class BaseConnection extends SQLiteConnection {
                 && this.getCurrentTransactionMode() != null) {
             if (isReadOnly()) {
                 // this is a read-only transaction, make sure all writing operations are rejected by
-                // the DB
+                // the SQLiteDatabase
                 // (note: this pragma is evaluated on a per-transaction basis by SQLite)
                 getDatabase()._exec("PRAGMA query_only = true;");
             } else {

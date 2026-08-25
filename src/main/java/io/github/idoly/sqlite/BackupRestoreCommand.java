@@ -1,6 +1,6 @@
 package io.github.idoly.sqlite;
 
-import io.github.idoly.sqlite.core.DB;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.sql.SQLException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -10,11 +10,11 @@ import java.util.regex.Pattern;
  *
  * @author leo
  */
-public final class ExtendedCommand {
-    private ExtendedCommand() {}
+public final class BackupRestoreCommand {
+    private BackupRestoreCommand() {}
 
-    public interface SQLExtension {
-        void execute(DB database) throws SQLException;
+    public interface Command {
+        void execute(SQLiteDatabase database) throws SQLException;
     }
 
     /**
@@ -26,7 +26,7 @@ public final class ExtendedCommand {
      * @return BackupCommand object if the argument is a backup command; RestoreCommand object if
      *     the argument is a restore command;
      */
-    public static SQLExtension parse(String sql) throws SQLException {
+    public static Command parse(String sql) throws SQLException {
         if (sql == null) return null;
         if (sql.regionMatches(true, 0, "backup", 0, 6)) return BackupCommand.parse(sql);
         if (sql.regionMatches(true, 0, "restore", 0, 7)) return RestoreCommand.parse(sql);
@@ -48,7 +48,7 @@ public final class ExtendedCommand {
         else return s;
     }
 
-    public static final class BackupCommand implements SQLExtension {
+    public static final class BackupCommand implements Command {
         public final String srcDB;
         public final String destFile;
 
@@ -88,16 +88,16 @@ public final class ExtendedCommand {
             throw new SQLException("syntax error: " + sql);
         }
 
-        public void execute(DB db) throws SQLException {
+        public void execute(SQLiteDatabase db) throws SQLException {
             int rc = db.backup(srcDB, destFile, null);
 
             if (rc != SQLiteErrorCode.SQLITE_OK.code) {
-                throw DB.newSQLException(rc, "Backup failed");
+                throw SQLiteDatabase.newSQLException(rc, "Backup failed");
             }
         }
     }
 
-    public static final class RestoreCommand implements SQLExtension {
+    public static final class RestoreCommand implements Command {
         public final String targetDB;
         public final String srcFile;
         private static final Pattern RESTORE_COMMAND =
@@ -137,13 +137,13 @@ public final class ExtendedCommand {
 
         /**
          * @see
-         *     io.github.idoly.sqlite.ExtendedCommand.SQLExtension#execute(io.github.idoly.sqlite.core.DB)
+         *     io.github.idoly.sqlite.BackupRestoreCommand.Command#execute(io.github.idoly.sqlite.core.SQLiteDatabase)
          */
-        public void execute(DB db) throws SQLException {
+        public void execute(SQLiteDatabase db) throws SQLException {
             int rc = db.restore(targetDB, srcFile, null);
 
             if (rc != SQLiteErrorCode.SQLITE_OK.code) {
-                throw DB.newSQLException(rc, "Restore failed");
+                throw SQLiteDatabase.newSQLException(rc, "Restore failed");
             }
         }
     }

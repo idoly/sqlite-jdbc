@@ -1,10 +1,10 @@
 package io.github.idoly.sqlite.internal;
 
-import io.github.idoly.sqlite.ExtendedCommand;
-import io.github.idoly.sqlite.ExtendedCommand.SQLExtension;
+import io.github.idoly.sqlite.BackupRestoreCommand;
+import io.github.idoly.sqlite.BackupRestoreCommand.Command;
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.core.CoreStatement;
-import io.github.idoly.sqlite.core.DB;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -37,7 +37,7 @@ public abstract class BaseStatement extends CoreStatement {
 
         return this.withConnectionTimeout(
                 () -> {
-                    SQLExtension ext = ExtendedCommand.parse(sql);
+                    Command ext = BackupRestoreCommand.parse(sql);
                     if (ext != null) {
                         ext.execute(conn.getDatabase());
 
@@ -103,9 +103,9 @@ public abstract class BaseStatement extends CoreStatement {
 
         return this.withConnectionTimeout(
                 () -> {
-                    DB db = conn.getDatabase();
+                    SQLiteDatabase db = conn.getDatabase();
                     long changes = 0;
-                    SQLExtension ext = ExtendedCommand.parse(sql);
+                    Command ext = BackupRestoreCommand.parse(sql);
                     if (ext != null) {
                         // execute extended command
                         ext.execute(db);
@@ -116,7 +116,7 @@ public abstract class BaseStatement extends CoreStatement {
                                 // directly invokes the exec API to support multiple SQL statements
                                 int statusCode = db._exec(sql);
                                 if (statusCode != SQLITE_OK)
-                                    throw DB.newSQLException(statusCode, "");
+                                    throw SQLiteDatabase.newSQLException(statusCode, "");
                                 updateGeneratedKeys();
                                 changes = db.total_changes() - changes;
                             }
@@ -142,12 +142,12 @@ public abstract class BaseStatement extends CoreStatement {
             throw new SQLException("ResultSet already requested");
         }
 
-        if (pointer.safeRunInt(DB::column_count) == 0) {
+        if (pointer.safeRunInt(SQLiteDatabase::column_count) == 0) {
             return null;
         }
 
         if (rs.colsMeta == null) {
-            rs.colsMeta = pointer.safeRun(DB::column_names);
+            rs.colsMeta = pointer.safeRun(SQLiteDatabase::column_names);
         }
 
         rs.cols = rs.colsMeta;
@@ -175,11 +175,11 @@ public abstract class BaseStatement extends CoreStatement {
      * @see java.sql.Statement#getLargeUpdateCount()
      */
     public long getLargeUpdateCount() throws SQLException {
-        DB db = conn.getDatabase();
+        SQLiteDatabase db = conn.getDatabase();
         if (!pointer.isClosed()
                 && !rs.isOpen()
                 && !resultsWaiting
-                && pointer.safeRunInt(DB::column_count) == 0) return updateCount;
+                && pointer.safeRunInt(SQLiteDatabase::column_count) == 0) return updateCount;
         return -1;
     }
 
@@ -207,7 +207,7 @@ public abstract class BaseStatement extends CoreStatement {
         if (batch == null || batchPos == 0) return new long[] {};
 
         long[] changes = new long[batchPos];
-        DB db = conn.getDatabase();
+        SQLiteDatabase db = conn.getDatabase();
         synchronized (db) {
             try {
                 for (int i = 0; i < changes.length; i++) {

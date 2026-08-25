@@ -2,31 +2,31 @@
 include VERSION
 
 TARGET := target
-OSINFO_CLASS := io.github.idoly.sqlite.util.OSInfo
-OSINFO_PROG := lib/io/github/idoly/sqlite/util/OSInfo.class
+PLATFORM_CLASS := io.github.idoly.sqlite.util.NativePlatform
+PLATFORM_PROG := lib/io/github/idoly/sqlite/util/NativePlatform.class
 
 ifndef OS_NAME
-NEED_OSINFO := 1
+NEED_PLATFORM := 1
 endif
 ifndef OS_ARCH
-NEED_OSINFO := 1
+NEED_PLATFORM := 1
 endif
 
-ifdef NEED_OSINFO
+ifdef NEED_PLATFORM
 ifndef JAVA_HOME
 $(error JAVA_HOME must point to JDK 25 or newer)
 endif
 JAVA := "$(JAVA_HOME)/bin/java"
 JAVAC := "$(JAVA_HOME)/bin/javac"
-ifeq ("$(wildcard $(OSINFO_PROG))","")
-$(info Building OSInfo tool)
-$(shell mkdir -p lib && $(JAVAC) -d lib src/main/java/io/github/idoly/sqlite/util/OSInfo.java)
+ifeq ("$(wildcard $(PLATFORM_PROG))","")
+$(info Building NativePlatform tool)
+$(shell mkdir -p lib && $(JAVAC) -d lib src/main/java/io/github/idoly/sqlite/util/NativePlatform.java)
 endif
 ifndef OS_NAME
-OS_NAME := $(shell $(JAVA) -cp lib $(OSINFO_CLASS) --os)
+OS_NAME := $(shell $(JAVA) -cp lib $(PLATFORM_CLASS) --os)
 endif
 ifndef OS_ARCH
-OS_ARCH := $(shell $(JAVA) -cp lib $(OSINFO_CLASS) --arch)
+OS_ARCH := $(shell $(JAVA) -cp lib $(PLATFORM_CLASS) --arch)
 endif
 endif
 

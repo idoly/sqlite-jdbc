@@ -1,22 +1,23 @@
 package io.github.idoly.sqlite;
 
-import io.github.idoly.sqlite.core.Codes;
-import io.github.idoly.sqlite.core.DB;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
+import io.github.idoly.sqlite.core.SQLiteResultCodes;
 import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
  * Provides an interface for creating SQLite user-defined functions.
  *
- * <p>A subclass of <code>io.github.idoly.sqlite.Function</code> can be registered with <code>
- * Function.create()</code> and called by the name it was given. All functions must implement <code>
+ * <p>A subclass of <code>io.github.idoly.sqlite.SQLiteFunction</code> can be registered with <code>
+ * SQLiteFunction.create()</code> and called by the name it was given. All functions must implement
+ * <code>
  * xFunc()</code>, which is called when SQLite runs the custom function. E.g.
  *
  * <pre>
- *      Class.forName("io.github.idoly.sqlite.JDBC");
+ *      Class.forName("io.github.idoly.sqlite.SQLiteDriver");
  *      Connection conn = DriverManager.getConnection("jdbc:sqlite:");
  *
- *      Function.create(conn, "myFunc", new Function() {
+ *      SQLiteFunction.create(conn, "myFunc", new SQLiteFunction() {
  *          protected void xFunc() {
  *              System.out.println("myFunc called!");
  *          }
@@ -30,15 +31,15 @@ import java.sql.SQLException;
  * value_&lt;type&gt;(int)</code> returns the value of the specific argument. Similarly, a function
  * can return a value using the <code>result(&lt;type&gt;)</code> function.
  */
-public abstract class Function {
+public abstract class SQLiteFunction {
     /**
-     * Flag to provide to {@link #create(Connection, String, Function, int)} that marks this
-     * Function as deterministic, making is usable in Indexes on Expressions.
+     * Flag to provide to {@link #create(Connection, String, SQLiteFunction, int)} that marks this
+     * SQLiteFunction as deterministic, making is usable in Indexes on Expressions.
      */
     public static final int FLAG_DETERMINISTIC = 0x800;
 
     private SQLiteConnection conn;
-    private DB db;
+    private SQLiteDatabase db;
 
     long context = 0; // pointer sqlite3_context*
     long value = 0; // pointer sqlite3_value**
@@ -51,7 +52,7 @@ public abstract class Function {
      * @param name The name of the function.
      * @param function The function to register.
      */
-    public static void create(Connection connection, String name, Function function)
+    public static void create(Connection connection, String name, SQLiteFunction function)
             throws SQLException {
         create(connection, name, function, 0);
     }
@@ -64,7 +65,8 @@ public abstract class Function {
      * @param function The function to register.
      * @param flags Extra flags to pass, such as {@link #FLAG_DETERMINISTIC}
      */
-    public static void create(Connection connection, String name, Function function, int flags)
+    public static void create(
+            Connection connection, String name, SQLiteFunction function, int flags)
             throws SQLException {
         create(connection, name, function, -1, flags);
     }
@@ -79,7 +81,11 @@ public abstract class Function {
      * @param flags Extra flags to pass, such as {@link #FLAG_DETERMINISTIC}
      */
     public static void create(
-            Connection connection, String name, Function function, int argumentCount, int flags)
+            Connection connection,
+            String name,
+            SQLiteFunction function,
+            int argumentCount,
+            int flags)
             throws SQLException {
         SQLiteConnection sqliteConnection = requireSQLiteConnection(connection);
         if (name == null || name.isEmpty())
@@ -89,7 +95,8 @@ public abstract class Function {
 
         function.conn = sqliteConnection;
         function.db = sqliteConnection.getDatabase();
-        if (function.db.create_function(name, function, argumentCount, flags) != Codes.SQLITE_OK) {
+        if (function.db.create_function(name, function, argumentCount, flags)
+                != SQLiteResultCodes.SQLITE_OK) {
             throw new SQLException("error creating function");
         }
     }
@@ -267,11 +274,11 @@ public abstract class Function {
     /**
      * Provides an interface for creating SQLite user-defined aggregate functions.
      *
-     * @see Function
+     * @see SQLiteFunction
      */
-    public abstract static class Aggregate extends Function implements Cloneable {
+    public abstract static class Aggregate extends SQLiteFunction implements Cloneable {
         /**
-         * @see io.github.idoly.sqlite.Function#xFunc()
+         * @see io.github.idoly.sqlite.SQLiteFunction#xFunc()
          */
         protected final void xFunc() {}
 

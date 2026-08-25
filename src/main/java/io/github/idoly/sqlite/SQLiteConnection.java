@@ -2,8 +2,8 @@ package io.github.idoly.sqlite;
 
 import io.github.idoly.sqlite.SQLiteConfig.TransactionMode;
 import io.github.idoly.sqlite.core.CoreDatabaseMetaData;
-import io.github.idoly.sqlite.core.DB;
-import io.github.idoly.sqlite.core.NativeDB;
+import io.github.idoly.sqlite.core.FfmDatabase;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import io.github.idoly.sqlite.internal.DatabaseMetaDataImpl;
 import java.io.File;
 import java.io.IOException;
@@ -26,15 +26,15 @@ import java.util.concurrent.Executor;
 
 public abstract class SQLiteConnection implements Connection {
     private static final String RESOURCE_NAME_PREFIX = ":resource:";
-    private final DB db;
+    private final SQLiteDatabase db;
     private CoreDatabaseMetaData meta = null;
     private final SQLiteConnectionConfig connectionConfig;
 
     private TransactionMode currentTransactionMode;
     private boolean firstStatementExecuted = false;
 
-    /** Connection constructor for reusing an existing DB handle */
-    public SQLiteConnection(DB db) {
+    /** Connection constructor for reusing an existing SQLite database handle */
+    public SQLiteConnection(SQLiteDatabase db) {
         this.db = db;
         connectionConfig = db.getConfig().newConnectionConfig();
     }
@@ -57,9 +57,9 @@ public abstract class SQLiteConnection implements Connection {
      * @param prop The configurations to apply.
      */
     public SQLiteConnection(String url, String fileName, Properties prop) throws SQLException {
-        DB newDB = null;
+        SQLiteDatabase newDatabase = null;
         try {
-            this.db = newDB = open(url, fileName, prop);
+            this.db = newDatabase = open(url, fileName, prop);
             SQLiteConfig config = this.db.getConfig();
             this.connectionConfig = this.db.getConfig().newConnectionConfig();
             config.apply(this);
@@ -68,8 +68,8 @@ public abstract class SQLiteConnection implements Connection {
             this.firstStatementExecuted = false;
         } catch (Throwable t) {
             try {
-                if (newDB != null) {
-                    newDB.close();
+                if (newDatabase != null) {
+                    newDatabase.close();
                 }
             } catch (Exception e) {
                 t.addSuppressed(e);
@@ -229,7 +229,8 @@ public abstract class SQLiteConnection implements Connection {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/c_open_autoproxy.html">https://www.sqlite.org/c3ref/c_open_autoproxy.html</a>
      */
-    private static DB open(String url, String origFileName, Properties props) throws SQLException {
+    private static SQLiteDatabase open(String url, String origFileName, Properties props)
+            throws SQLException {
         // Create a copy of the given properties
         Properties newProps = new Properties();
         newProps.putAll(props);
@@ -268,11 +269,11 @@ public abstract class SQLiteConnection implements Connection {
             }
         }
 
-        // load the native DB
-        DB db = null;
+        // load the FFM database backend
+        SQLiteDatabase db = null;
         try {
-            NativeDB.load();
-            db = new NativeDB(url, fileName, config);
+            FfmDatabase.load();
+            db = new FfmDatabase(url, fileName, config);
         } catch (Exception e) {
             SQLException err = new SQLException("Error opening connection");
             err.initCause(e);
@@ -307,17 +308,17 @@ public abstract class SQLiteConnection implements Connection {
             if (resourceLastModified < tmpFileLastModified) {
                 return dbFile;
             } else {
-                // remove the old DB file
+                // remove the old database file
                 boolean deletionSucceeded = dbFile.delete();
                 if (!deletionSucceeded) {
                     throw new IOException(
-                            "failed to remove existing DB file: " + dbFile.getAbsolutePath());
+                            "failed to remove existing database file: " + dbFile.getAbsolutePath());
                 }
             }
 
             //
             //            if (md5sum1.equals(md5sum2))
-            //                return dbFile; // no need to extract the DB file
+            //                return dbFile; // no need to extract the database file
             //            else
             //            {
             //            }
@@ -332,7 +333,7 @@ public abstract class SQLiteConnection implements Connection {
         }
     }
 
-    public DB getDatabase() {
+    public SQLiteDatabase getDatabase() {
         return db;
     }
 
@@ -441,7 +442,7 @@ public abstract class SQLiteConnection implements Connection {
     }
 
     /**
-     * Add a listener for DB update events, see https://www.sqlite.org/c3ref/update_hook.html
+     * Add a listener for database update events, see https://www.sqlite.org/c3ref/update_hook.html
      *
      * @param listener The listener to receive update events
      */
@@ -450,7 +451,7 @@ public abstract class SQLiteConnection implements Connection {
     }
 
     /**
-     * Remove a listener registered for DB update events.
+     * Remove a listener registered for database update events.
      *
      * @param listener The listener to no longer receive update events
      */
@@ -459,7 +460,7 @@ public abstract class SQLiteConnection implements Connection {
     }
 
     /**
-     * Add a listener for DB commit/rollback events, see
+     * Add a listener for database commit/rollback events, see
      * https://www.sqlite.org/c3ref/commit_hook.html
      *
      * @param listener The listener to receive commit events
@@ -469,7 +470,7 @@ public abstract class SQLiteConnection implements Connection {
     }
 
     /**
-     * Remove a listener registered for DB commit/rollback events.
+     * Remove a listener registered for database commit/rollback events.
      *
      * @param listener The listener to no longer receive commit/rollback events.
      */

@@ -7,11 +7,11 @@ import java.util.Locale;
 import java.util.stream.Stream;
 
 /** Resolves the supported native-library platform from JDK system properties. */
-public final class OSInfo {
+public final class NativePlatform {
     public static final String X86_64 = "x86_64";
     public static final String AARCH64 = "aarch64";
 
-    private OSInfo() {}
+    private NativePlatform() {}
 
     public static void main(String[] args) {
         if (args.length > 0 && "--os".equals(args[0])) {
@@ -36,7 +36,7 @@ public final class OSInfo {
     }
 
     public static String getArchName() {
-        String override = System.getProperty("io.github.idoly.sqlite.osinfo.architecture");
+        String override = System.getProperty("io.github.idoly.sqlite.native.architecture");
         if (override != null && !override.isBlank()) return override;
 
         String architecture = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
@@ -50,7 +50,8 @@ public final class OSInfo {
     public static boolean isMusl() {
         Path mapFilesDirectory = Path.of("/proc/self/map_files");
         try (Stream<Path> paths = Files.list(mapFilesDirectory)) {
-            if (paths.map(OSInfo::realPath).anyMatch(path -> path.contains("musl"))) return true;
+            if (paths.map(NativePlatform::realPath).anyMatch(path -> path.contains("musl")))
+                return true;
         } catch (IOException | SecurityException ignored) {
             // /proc may be unavailable in containers or restricted environments.
         }

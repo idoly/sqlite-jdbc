@@ -4,14 +4,14 @@ import io.github.idoly.sqlite.internal.ConnectionImpl;
 import java.sql.*;
 import java.util.Properties;
 
-public final class JDBC implements Driver {
+public final class SQLiteDriver implements Driver {
     public static final String PREFIX = "jdbc:sqlite:";
 
-    public JDBC() {}
+    public SQLiteDriver() {}
 
     static {
         try {
-            DriverManager.registerDriver(new JDBC());
+            DriverManager.registerDriver(new SQLiteDriver());
         } catch (SQLException error) {
             throw new ExceptionInInitializerError(error);
         }

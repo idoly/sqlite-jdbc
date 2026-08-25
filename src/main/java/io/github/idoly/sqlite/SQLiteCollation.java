@@ -1,22 +1,23 @@
 package io.github.idoly.sqlite;
 
-import io.github.idoly.sqlite.core.Codes;
+import io.github.idoly.sqlite.core.SQLiteResultCodes;
 import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
  * Provides an interface for creating SQLite user-defined collations.
  *
- * <p>A subclass of <code>io.github.idoly.sqlite.Collation</code> can be registered with <code>
- * Collation.create()</code> and called by the name it was given. All collations must implement
- * <code>xCompare(String, String)</code>, which is called when SQLite compares two strings using the
- * custom collation. Eg.
+ * <p>A subclass of <code>io.github.idoly.sqlite.SQLiteCollation</code> can be registered with
+ * <code>
+ * SQLiteCollation.create()</code> and called by the name it was given. All collations must
+ * implement <code>xCompare(String, String)</code>, which is called when SQLite compares two strings
+ * using the custom collation. Eg.
  *
  * <pre>
- *      Class.forName("io.github.idoly.sqlite.JDBC");
+ *      Class.forName("io.github.idoly.sqlite.SQLiteDriver");
  *      Connection conn = DriverManager.getConnection("jdbc:sqlite:");
  *
- *      Collation.create(conn, "REVERSE", new Collation() {
+ *      SQLiteCollation.create(conn, "REVERSE", new SQLiteCollation() {
  *          protected int xCompare(String str1, String str2) {
  *              return str1.compareTo(str2) * -1;
  *          }
@@ -25,7 +26,7 @@ import java.sql.SQLException;
  *      conn.createStatement().execute("select c1 from t order by c1 collate REVERSE;");
  *  </pre>
  */
-public abstract class Collation {
+public abstract class SQLiteCollation {
 
     /**
      * Registers a given collation with the connection.
@@ -34,7 +35,7 @@ public abstract class Collation {
      * @param name The name of the collation.
      * @param collation The collation to register.
      */
-    public static void create(Connection connection, String name, Collation collation)
+    public static void create(Connection connection, String name, SQLiteCollation collation)
             throws SQLException {
         SQLiteConnection sqliteConnection = requireSQLiteConnection(connection);
         if (name == null || name.isEmpty()) {
@@ -42,7 +43,8 @@ public abstract class Collation {
         }
         if (collation == null) throw new SQLException("collation must not be null");
 
-        if (sqliteConnection.getDatabase().create_collation(name, collation) != Codes.SQLITE_OK) {
+        if (sqliteConnection.getDatabase().create_collation(name, collation)
+                != SQLiteResultCodes.SQLITE_OK) {
             throw new SQLException("error creating collation");
         }
     }

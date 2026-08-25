@@ -1,7 +1,7 @@
 // --------------------------------------
 // sqlite-jdbc Project
 //
-// ExtendedCommandTest.java
+// BackupRestoreCommandTest.java
 // Since: Mar 12, 2010
 //
 // $URL$
@@ -11,9 +11,9 @@ package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.idoly.sqlite.ExtendedCommand.BackupCommand;
-import io.github.idoly.sqlite.ExtendedCommand.RestoreCommand;
-import io.github.idoly.sqlite.ExtendedCommand.SQLExtension;
+import io.github.idoly.sqlite.BackupRestoreCommand.BackupCommand;
+import io.github.idoly.sqlite.BackupRestoreCommand.Command;
+import io.github.idoly.sqlite.BackupRestoreCommand.RestoreCommand;
 import java.sql.SQLException;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -21,16 +21,16 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-public class ExtendedCommandTest {
+public class BackupRestoreCommandTest {
 
     public static BackupCommand parseBackupCommand(String sql) throws SQLException {
-        SQLExtension e = ExtendedCommand.parse(sql);
+        Command e = BackupRestoreCommand.parse(sql);
         assertThat(e instanceof BackupCommand).isTrue();
         return (BackupCommand) e;
     }
 
     public static RestoreCommand parseRestoreCommand(String sql) throws SQLException {
-        SQLExtension e = ExtendedCommand.parse(sql);
+        Command e = BackupRestoreCommand.parse(sql);
         assertThat(e instanceof RestoreCommand).isTrue();
         return (RestoreCommand) e;
     }
@@ -77,7 +77,7 @@ public class ExtendedCommandTest {
     @ParameterizedTest
     @MethodSource
     public void removeQuotation(String input, String expected) throws SQLException {
-        assertThat(ExtendedCommand.removeQuotation(input)).isEqualTo(expected);
+        assertThat(BackupRestoreCommand.removeQuotation(input)).isEqualTo(expected);
     }
 
     private static Stream<Arguments> removeQuotation() {

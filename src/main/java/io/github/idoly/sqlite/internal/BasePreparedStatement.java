@@ -2,7 +2,7 @@ package io.github.idoly.sqlite.internal;
 
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.core.CorePreparedStatement;
-import io.github.idoly.sqlite.core.DB;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -34,14 +34,14 @@ public abstract class BasePreparedStatement extends CorePreparedStatement {
 
     public void clearParameters() throws SQLException {
         checkOpen();
-        pointer.safeRunConsume(DB::clearBindings);
+        pointer.safeRunConsume(SQLiteDatabase::clearBindings);
         if (batch != null) for (int i = batchPos; i < batchPos + paramCount; i++) batch[i] = null;
     }
 
     public boolean execute() throws SQLException {
         checkOpen();
         rs.close();
-        pointer.safeRunConsume(DB::reset);
+        pointer.safeRunConsume(SQLiteDatabase::reset);
         exhaustedResults = false;
 
         if (this.conn instanceof BaseConnection) {
@@ -61,7 +61,8 @@ public abstract class BasePreparedStatement extends CorePreparedStatement {
                         }
                         return 0 != columnCount;
                     } finally {
-                        if (!success && !pointer.isClosed()) pointer.safeRunConsume(DB::reset);
+                        if (!success && !pointer.isClosed())
+                            pointer.safeRunConsume(SQLiteDatabase::reset);
                     }
                 });
     }
@@ -74,7 +75,7 @@ public abstract class BasePreparedStatement extends CorePreparedStatement {
         }
 
         rs.close();
-        pointer.safeRunConsume(DB::reset);
+        pointer.safeRunConsume(SQLiteDatabase::reset);
         exhaustedResults = false;
 
         if (this.conn instanceof BaseConnection) {
@@ -90,7 +91,7 @@ public abstract class BasePreparedStatement extends CorePreparedStatement {
                         success = true;
                     } finally {
                         if (!success && !pointer.isClosed()) {
-                            pointer.safeRunInt(DB::reset);
+                            pointer.safeRunInt(SQLiteDatabase::reset);
                         }
                     }
                     return getResultSet();
@@ -109,7 +110,7 @@ public abstract class BasePreparedStatement extends CorePreparedStatement {
         }
 
         rs.close();
-        pointer.safeRunConsume(DB::reset);
+        pointer.safeRunConsume(SQLiteDatabase::reset);
         exhaustedResults = false;
 
         if (this.conn instanceof BaseConnection) {

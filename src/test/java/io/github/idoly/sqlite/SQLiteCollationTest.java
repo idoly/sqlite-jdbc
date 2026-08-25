@@ -15,7 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** Tests User Defined Collations. */
-public class CollationTest {
+public class SQLiteCollationTest {
     private Connection conn;
     private Statement stat;
 
@@ -37,10 +37,10 @@ public class CollationTest {
     @Test
     public void reverseCollation() throws SQLException {
         ArrayList<String> received = new ArrayList<>();
-        Collation.create(
+        SQLiteCollation.create(
                 conn,
                 "REVERSE",
-                new Collation() {
+                new SQLiteCollation() {
                     @Override
                     protected int xCompare(String str1, String str2) {
                         received.add(str1);
@@ -68,10 +68,10 @@ public class CollationTest {
     @Test
     public void unicodeCollation() throws SQLException {
         ArrayList<String> received = new ArrayList<>();
-        Collation.create(
+        SQLiteCollation.create(
                 conn,
                 "UNICODE",
-                new Collation() {
+                new SQLiteCollation() {
                     @Override
                     protected int xCompare(String str1, String str2) {
                         received.add(str1);
@@ -103,19 +103,19 @@ public class CollationTest {
 
     @Test
     public void twoCollationsNoConflict() throws SQLException {
-        Collation.create(
+        SQLiteCollation.create(
                 conn,
                 "REVERSE",
-                new Collation() {
+                new SQLiteCollation() {
                     @Override
                     protected int xCompare(String str1, String str2) {
                         return str1.compareTo(str2) * -1;
                     }
                 });
-        Collation.create(
+        SQLiteCollation.create(
                 conn,
                 "NORMAL",
-                new Collation() {
+                new SQLiteCollation() {
                     @Override
                     protected int xCompare(String str1, String str2) {
                         return str1.compareTo(str2);
@@ -155,10 +155,10 @@ public class CollationTest {
     @Test
     public void validateSpecialCharactersAreCorrectlyPassedToJava() throws SQLException {
         ArrayList<String> received = new ArrayList<>();
-        Collation.create(
+        SQLiteCollation.create(
                 conn,
                 "UNICODE",
-                new Collation() {
+                new SQLiteCollation() {
                     @Override
                     protected int xCompare(String str1, String str2) {
                         received.add(str1);
@@ -186,10 +186,10 @@ public class CollationTest {
 
     @Test
     public void destroy() throws SQLException {
-        Collation.create(
+        SQLiteCollation.create(
                 conn,
                 "c1",
-                new Collation() {
+                new SQLiteCollation() {
                     @Override
                     protected int xCompare(String str1, String str2) {
                         valStr1 = str1;
@@ -205,7 +205,7 @@ public class CollationTest {
         assertThat(valStr1).isEqualTo("a");
         assertThat(valStr2).isEqualTo("b");
 
-        Collation.destroy(conn, "c1");
-        Collation.destroy(conn, "c1");
+        SQLiteCollation.destroy(conn, "c1");
+        SQLiteCollation.destroy(conn, "c1");
     }
 }

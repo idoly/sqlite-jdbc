@@ -6,11 +6,13 @@ import java.sql.SQLException;
  * A class for safely wrapping calls to a native pointer to a statement, ensuring no other thread
  * has access to the pointer while it is run
  */
-public final class SafeStmtPtr {
-    // store a reference to the DB, to lock it before any safe function is called. This avoids
-    // deadlocking by locking the DB. All calls with the raw pointer are synchronized with the DB
+public final class StatementHandle {
+    // store a reference to the SQLiteDatabase, to lock it before any safe function is called. This
+    // avoids
+    // deadlocking by locking the SQLiteDatabase. All calls with the raw pointer are synchronized
+    // with the SQLiteDatabase
     // anyways, so making a separate lock would be pointless
-    private final DB db;
+    private final SQLiteDatabase db;
     private final long ptr;
 
     private volatile boolean closed = false;
@@ -27,7 +29,7 @@ public final class SafeStmtPtr {
      *     executed to avoid deadlocks
      * @param ptr the raw pointer
      */
-    public SafeStmtPtr(DB db, long ptr) {
+    public StatementHandle(SQLiteDatabase db, long ptr) {
         this.db = db;
         this.ptr = ptr;
     }
@@ -78,7 +80,7 @@ public final class SafeStmtPtr {
      * @return the return of the passed in function
      * @throws SQLException if the pointer is utilized elsewhere
      */
-    public <E extends Throwable> int safeRunInt(SafePtrIntFunction<E> run) throws SQLException, E {
+    public <E extends Throwable> int safeRunInt(IntOperation<E> run) throws SQLException, E {
         synchronized (db) {
             this.ensureOpen();
             return run.run(db, ptr);
@@ -92,8 +94,7 @@ public final class SafeStmtPtr {
      * @return the return of the passed in function
      * @throws SQLException if the pointer is utilized elsewhere
      */
-    public <E extends Throwable> long safeRunLong(SafePtrLongFunction<E> run)
-            throws SQLException, E {
+    public <E extends Throwable> long safeRunLong(LongOperation<E> run) throws SQLException, E {
         synchronized (db) {
             this.ensureOpen();
             return run.run(db, ptr);
@@ -107,7 +108,7 @@ public final class SafeStmtPtr {
      * @return the return of the passed in function
      * @throws SQLException if the pointer is utilized elsewhere
      */
-    public <E extends Throwable> double safeRunDouble(SafePtrDoubleFunction<E> run)
+    public <E extends Throwable> double safeRunDouble(DoubleOperation<E> run)
             throws SQLException, E {
         synchronized (db) {
             this.ensureOpen();
@@ -122,7 +123,7 @@ public final class SafeStmtPtr {
      * @return the return code of the function
      * @throws SQLException if the pointer is utilized elsewhere
      */
-    public <T, E extends Throwable> T safeRun(SafePtrFunction<T, E> run) throws SQLException, E {
+    public <T, E extends Throwable> T safeRun(Operation<T, E> run) throws SQLException, E {
         synchronized (db) {
             this.ensureOpen();
             return run.run(db, ptr);
@@ -135,8 +136,7 @@ public final class SafeStmtPtr {
      * @param run the function to run
      * @throws SQLException if the pointer is utilized elsewhere
      */
-    public <E extends Throwable> void safeRunConsume(SafePtrConsumer<E> run)
-            throws SQLException, E {
+    public <E extends Throwable> void safeRunConsume(VoidOperation<E> run) throws SQLException, E {
         synchronized (db) {
             this.ensureOpen();
             run.run(db, ptr);
@@ -153,7 +153,7 @@ public final class SafeStmtPtr {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        SafeStmtPtr that = (SafeStmtPtr) o;
+        StatementHandle that = (StatementHandle) o;
         return db == that.db && ptr == that.ptr;
     }
 
@@ -163,27 +163,27 @@ public final class SafeStmtPtr {
     }
 
     @FunctionalInterface
-    public interface SafePtrIntFunction<E extends Throwable> {
-        int run(DB db, long ptr) throws E;
+    public interface IntOperation<E extends Throwable> {
+        int run(SQLiteDatabase db, long ptr) throws E;
     }
 
     @FunctionalInterface
-    public interface SafePtrLongFunction<E extends Throwable> {
-        long run(DB db, long ptr) throws E;
+    public interface LongOperation<E extends Throwable> {
+        long run(SQLiteDatabase db, long ptr) throws E;
     }
 
     @FunctionalInterface
-    public interface SafePtrDoubleFunction<E extends Throwable> {
-        double run(DB db, long ptr) throws E;
+    public interface DoubleOperation<E extends Throwable> {
+        double run(SQLiteDatabase db, long ptr) throws E;
     }
 
     @FunctionalInterface
-    public interface SafePtrFunction<T, E extends Throwable> {
-        T run(DB db, long ptr) throws E;
+    public interface Operation<T, E extends Throwable> {
+        T run(SQLiteDatabase db, long ptr) throws E;
     }
 
     @FunctionalInterface
-    public interface SafePtrConsumer<E extends Throwable> {
-        void run(DB db, long ptr) throws E;
+    public interface VoidOperation<E extends Throwable> {
+        void run(SQLiteDatabase db, long ptr) throws E;
     }
 }

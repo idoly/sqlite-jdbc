@@ -1,10 +1,10 @@
 package io.github.idoly.sqlite.core;
 
-import io.github.idoly.sqlite.BusyHandler;
-import io.github.idoly.sqlite.Collation;
-import io.github.idoly.sqlite.Function;
-import io.github.idoly.sqlite.ProgressHandler;
+import io.github.idoly.sqlite.SQLiteBusyHandler;
+import io.github.idoly.sqlite.SQLiteCollation;
 import io.github.idoly.sqlite.SQLiteConfig;
+import io.github.idoly.sqlite.SQLiteFunction;
+import io.github.idoly.sqlite.SQLiteProgressHandler;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -15,8 +15,8 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-/** SQLite backend implemented directly with the JDK Foreign Function and Memory API. */
-public final class NativeDB extends DB {
+/** SQLite backend implemented directly with the JDK Foreign SQLiteFunction and Memory API. */
+public final class FfmDatabase extends SQLiteDatabase {
     private static final int DEFAULT_BACKUP_BUSY_SLEEP_TIME_MILLIS = 100;
     private static final int DEFAULT_BACKUP_NUM_BUSY_BEFORE_FAIL = 3;
     private static final int DEFAULT_PAGES_PER_BACKUP_STEP = 100;
@@ -26,39 +26,41 @@ public final class NativeDB extends DB {
 
     private final Arena callbackArena = Arena.ofShared();
     private final Map<String, MemorySegment> collationStubs = new HashMap<>();
-    private final Map<String, Collation> collations = new HashMap<>();
-    private final Map<FunctionKey, FfmNative.FunctionRegistration> functions = new HashMap<>();
-    private BusyHandler busyHandler;
+    private final Map<String, SQLiteCollation> collations = new HashMap<>();
+    private final Map<FunctionKey, SQLiteFfmBindings.FunctionRegistration> functions =
+            new HashMap<>();
+    private SQLiteBusyHandler busyHandler;
     private MemorySegment busyHandlerStub = MemorySegment.NULL;
-    private ProgressHandler progressHandler;
+    private SQLiteProgressHandler progressHandler;
     private MemorySegment progressHandlerStub = MemorySegment.NULL;
     private MemorySegment updateHookStub = MemorySegment.NULL;
     private MemorySegment commitHookStub = MemorySegment.NULL;
     private MemorySegment rollbackHookStub = MemorySegment.NULL;
 
-    public NativeDB(String url, String fileName, SQLiteConfig config) throws SQLException {
+    public FfmDatabase(String url, String fileName, SQLiteConfig config) throws SQLException {
         super(url, fileName, config);
     }
 
     /** Initializes the FFM symbol table. */
     public static boolean load() {
-        return FfmNative.initialize();
+        return SQLiteFfmBindings.initialize();
     }
 
     @Override
     protected synchronized void _open(String file, int openFlags) throws SQLException {
-        pointer = FfmNative.open(stringToUtf8ByteArray(file), openFlags);
+        pointer = SQLiteFfmBindings.open(stringToUtf8ByteArray(file), openFlags);
     }
 
     @Override
     protected synchronized void _close() throws SQLException {
         if (pointer == 0) return;
-        FfmNative.setBusyHandler(pointer, MemorySegment.NULL);
-        FfmNative.setProgressHandler(pointer, 0, MemorySegment.NULL);
-        FfmNative.setUpdateHook(pointer, MemorySegment.NULL);
-        FfmNative.setTransactionHooks(pointer, MemorySegment.NULL, MemorySegment.NULL);
-        int result = FfmNative.close(pointer);
-        if (result != SQLITE_OK) throw newSQLException(result, FfmNative.errorMessage(pointer));
+        SQLiteFfmBindings.setBusyHandler(pointer, MemorySegment.NULL);
+        SQLiteFfmBindings.setProgressHandler(pointer, 0, MemorySegment.NULL);
+        SQLiteFfmBindings.setUpdateHook(pointer, MemorySegment.NULL);
+        SQLiteFfmBindings.setTransactionHooks(pointer, MemorySegment.NULL, MemorySegment.NULL);
+        int result = SQLiteFfmBindings.close(pointer);
+        if (result != SQLITE_OK)
+            throw newSQLException(result, SQLiteFfmBindings.errorMessage(pointer));
         pointer = 0;
         busyHandler = null;
         busyHandlerStub = MemorySegment.NULL;
@@ -75,243 +77,246 @@ public final class NativeDB extends DB {
 
     @Override
     public synchronized int _exec(String sql) throws SQLException {
-        return FfmNative.execute(databasePointer(), stringToUtf8ByteArray(sql));
+        return SQLiteFfmBindings.execute(databasePointer(), stringToUtf8ByteArray(sql));
     }
 
     @Override
     public synchronized int shared_cache(boolean enable) throws SQLException {
-        return FfmNative.enableSharedCache(enable);
+        return SQLiteFfmBindings.enableSharedCache(enable);
     }
 
     @Override
     public synchronized int enable_load_extension(boolean enable) throws SQLException {
-        return FfmNative.enableLoadExtension(databasePointer(), enable);
+        return SQLiteFfmBindings.enableLoadExtension(databasePointer(), enable);
     }
 
     @Override
     public void interrupt() throws SQLException {
         long database = pointer;
-        if (database != 0) FfmNative.interrupt(database);
+        if (database != 0) SQLiteFfmBindings.interrupt(database);
     }
 
     @Override
     public synchronized void busy_timeout(int ms) throws SQLException {
-        FfmNative.busyTimeout(databasePointer(), ms);
+        SQLiteFfmBindings.busyTimeout(databasePointer(), ms);
     }
 
     @Override
-    public synchronized void busy_handler(BusyHandler handler) throws SQLException {
+    public synchronized void busy_handler(SQLiteBusyHandler handler) throws SQLException {
         MemorySegment callback =
                 handler == null
                         ? MemorySegment.NULL
-                        : FfmNative.busyCallbackStub(callbackArena, handler);
-        int result = FfmNative.setBusyHandler(databasePointer(), callback);
+                        : SQLiteFfmBindings.busyCallbackStub(callbackArena, handler);
+        int result = SQLiteFfmBindings.setBusyHandler(databasePointer(), callback);
         if (result != SQLITE_OK) throw newSQLException(result, errmsg());
         busyHandler = handler;
         busyHandlerStub = callback;
     }
 
     @Override
-    protected synchronized SafeStmtPtr prepare(String sql) throws SQLException {
-        return new SafeStmtPtr(
-                this, FfmNative.prepare(databasePointer(), stringToUtf8ByteArray(sql)));
+    protected synchronized StatementHandle prepare(String sql) throws SQLException {
+        return new StatementHandle(
+                this, SQLiteFfmBindings.prepare(databasePointer(), stringToUtf8ByteArray(sql)));
     }
 
     @Override
     synchronized String errmsg() {
-        return pointer == 0 ? "SQLite database is closed" : FfmNative.errorMessage(pointer);
+        return pointer == 0 ? "SQLite database is closed" : SQLiteFfmBindings.errorMessage(pointer);
     }
 
     @Override
     public synchronized String libversion() {
-        return FfmNative.libraryVersion();
+        return SQLiteFfmBindings.libraryVersion();
     }
 
     @Override
     public synchronized long changes() throws SQLException {
-        return FfmNative.changes(databasePointer());
+        return SQLiteFfmBindings.changes(databasePointer());
     }
 
     @Override
     public synchronized long total_changes() throws SQLException {
-        return FfmNative.totalChanges(databasePointer());
+        return SQLiteFfmBindings.totalChanges(databasePointer());
     }
 
     @Override
     protected synchronized int finalize(long stmt) throws SQLException {
-        return FfmNative.finalizeStatement(stmt);
+        return SQLiteFfmBindings.finalizeStatement(stmt);
     }
 
     @Override
     public synchronized int step(long stmt) throws SQLException {
-        return FfmNative.step(stmt);
+        return SQLiteFfmBindings.step(stmt);
     }
 
     @Override
     public synchronized int reset(long stmt) throws SQLException {
-        return FfmNative.reset(stmt);
+        return SQLiteFfmBindings.reset(stmt);
     }
 
     @Override
     public synchronized int clearBindings(long statement) throws SQLException {
-        return FfmNative.clearBindings(statement);
+        return SQLiteFfmBindings.clearBindings(statement);
     }
 
     @Override
     synchronized int bind_parameter_count(long stmt) throws SQLException {
-        return FfmNative.bindParameterCount(stmt);
+        return SQLiteFfmBindings.bindParameterCount(stmt);
     }
 
     @Override
     public synchronized int column_count(long stmt) throws SQLException {
-        return FfmNative.columnCount(stmt);
+        return SQLiteFfmBindings.columnCount(stmt);
     }
 
     @Override
     public synchronized int column_type(long stmt, int col) throws SQLException {
-        return FfmNative.columnType(stmt, col);
+        return SQLiteFfmBindings.columnType(stmt, col);
     }
 
     @Override
     public synchronized String column_decltype(long stmt, int col) throws SQLException {
-        return utf8ByteBufferToString(FfmNative.columnDeclaredType(stmt, col));
+        return utf8ByteBufferToString(SQLiteFfmBindings.columnDeclaredType(stmt, col));
     }
 
     @Override
     public synchronized String column_table_name(long stmt, int col) throws SQLException {
-        return utf8ByteBufferToString(FfmNative.columnTableName(stmt, col));
+        return utf8ByteBufferToString(SQLiteFfmBindings.columnTableName(stmt, col));
     }
 
     @Override
     public synchronized String column_name(long stmt, int col) throws SQLException {
-        return utf8ByteBufferToString(FfmNative.columnName(stmt, col));
+        return utf8ByteBufferToString(SQLiteFfmBindings.columnName(stmt, col));
     }
 
     @Override
     public synchronized String column_text(long stmt, int col) throws SQLException {
-        return utf8ByteBufferToString(FfmNative.columnText(stmt, col));
+        return utf8ByteBufferToString(SQLiteFfmBindings.columnText(stmt, col));
     }
 
     @Override
     public synchronized byte[] column_blob(long stmt, int col) throws SQLException {
-        return FfmNative.columnBlob(stmt, col);
+        return SQLiteFfmBindings.columnBlob(stmt, col);
     }
 
     @Override
     public synchronized double column_double(long stmt, int col) throws SQLException {
-        return FfmNative.columnDouble(stmt, col);
+        return SQLiteFfmBindings.columnDouble(stmt, col);
     }
 
     @Override
     public synchronized long column_long(long stmt, int col) throws SQLException {
-        return FfmNative.columnLong(stmt, col);
+        return SQLiteFfmBindings.columnLong(stmt, col);
     }
 
     @Override
     public synchronized int column_int(long stmt, int col) throws SQLException {
-        return FfmNative.columnInt(stmt, col);
+        return SQLiteFfmBindings.columnInt(stmt, col);
     }
 
     @Override
     synchronized int bind_null(long stmt, int pos) throws SQLException {
-        return FfmNative.bindNull(stmt, pos);
+        return SQLiteFfmBindings.bindNull(stmt, pos);
     }
 
     @Override
     synchronized int bind_int(long stmt, int pos, int value) throws SQLException {
-        return FfmNative.bindInt(stmt, pos, value);
+        return SQLiteFfmBindings.bindInt(stmt, pos, value);
     }
 
     @Override
     synchronized int bind_long(long stmt, int pos, long value) throws SQLException {
-        return FfmNative.bindLong(stmt, pos, value);
+        return SQLiteFfmBindings.bindLong(stmt, pos, value);
     }
 
     @Override
     synchronized int bind_double(long stmt, int pos, double value) throws SQLException {
-        return FfmNative.bindDouble(stmt, pos, value);
+        return SQLiteFfmBindings.bindDouble(stmt, pos, value);
     }
 
     @Override
     synchronized int bind_text(long stmt, int pos, String value) throws SQLException {
-        return FfmNative.bindText(stmt, pos, stringToUtf8ByteArray(value));
+        return SQLiteFfmBindings.bindText(stmt, pos, stringToUtf8ByteArray(value));
     }
 
     @Override
     synchronized int bind_blob(long stmt, int pos, byte[] value) throws SQLException {
-        return FfmNative.bindBlob(stmt, pos, value);
+        return SQLiteFfmBindings.bindBlob(stmt, pos, value);
     }
 
     @Override
     public synchronized void result_null(long context) throws SQLException {
-        FfmNative.resultNull(context);
+        SQLiteFfmBindings.resultNull(context);
     }
 
     @Override
     public synchronized void result_text(long context, String value) throws SQLException {
-        FfmNative.resultText(context, value);
+        SQLiteFfmBindings.resultText(context, value);
     }
 
     @Override
     public synchronized void result_blob(long context, byte[] value) throws SQLException {
-        FfmNative.resultBlob(context, value);
+        SQLiteFfmBindings.resultBlob(context, value);
     }
 
     @Override
     public synchronized void result_double(long context, double value) throws SQLException {
-        FfmNative.resultDouble(context, value);
+        SQLiteFfmBindings.resultDouble(context, value);
     }
 
     @Override
     public synchronized void result_long(long context, long value) throws SQLException {
-        FfmNative.resultLong(context, value);
+        SQLiteFfmBindings.resultLong(context, value);
     }
 
     @Override
     public synchronized void result_int(long context, int value) throws SQLException {
-        FfmNative.resultInt(context, value);
+        SQLiteFfmBindings.resultInt(context, value);
     }
 
     @Override
     public synchronized void result_error(long context, String error) throws SQLException {
-        FfmNative.resultError(context, error);
+        SQLiteFfmBindings.resultError(context, error);
     }
 
     @Override
-    public synchronized String value_text(Function function, int argument) throws SQLException {
-        return FfmNative.valueText(function, argument);
-    }
-
-    @Override
-    public synchronized byte[] value_blob(Function function, int argument) throws SQLException {
-        return FfmNative.valueBlob(function, argument);
-    }
-
-    @Override
-    public synchronized double value_double(Function function, int argument) throws SQLException {
-        return FfmNative.valueDouble(function, argument);
-    }
-
-    @Override
-    public synchronized long value_long(Function function, int argument) throws SQLException {
-        return FfmNative.valueLong(function, argument);
-    }
-
-    @Override
-    public synchronized int value_int(Function function, int argument) throws SQLException {
-        return FfmNative.valueInt(function, argument);
-    }
-
-    @Override
-    public synchronized int value_type(Function function, int argument) throws SQLException {
-        return FfmNative.valueType(function, argument);
-    }
-
-    @Override
-    public synchronized int create_function(String name, Function function, int nArgs, int flags)
+    public synchronized String value_text(SQLiteFunction function, int argument)
             throws SQLException {
-        FfmNative.FunctionRegistration registration =
-                FfmNative.createFunction(
+        return SQLiteFfmBindings.valueText(function, argument);
+    }
+
+    @Override
+    public synchronized byte[] value_blob(SQLiteFunction function, int argument)
+            throws SQLException {
+        return SQLiteFfmBindings.valueBlob(function, argument);
+    }
+
+    @Override
+    public synchronized double value_double(SQLiteFunction function, int argument)
+            throws SQLException {
+        return SQLiteFfmBindings.valueDouble(function, argument);
+    }
+
+    @Override
+    public synchronized long value_long(SQLiteFunction function, int argument) throws SQLException {
+        return SQLiteFfmBindings.valueLong(function, argument);
+    }
+
+    @Override
+    public synchronized int value_int(SQLiteFunction function, int argument) throws SQLException {
+        return SQLiteFfmBindings.valueInt(function, argument);
+    }
+
+    @Override
+    public synchronized int value_type(SQLiteFunction function, int argument) throws SQLException {
+        return SQLiteFfmBindings.valueType(function, argument);
+    }
+
+    @Override
+    public synchronized int create_function(
+            String name, SQLiteFunction function, int nArgs, int flags) throws SQLException {
+        SQLiteFfmBindings.FunctionRegistration registration =
+                SQLiteFfmBindings.createFunction(
                         callbackArena, databasePointer(), name, function, nArgs, flags);
         functions.put(FunctionKey.of(name, nArgs), registration);
         return SQLITE_OK;
@@ -319,15 +324,16 @@ public final class NativeDB extends DB {
 
     @Override
     public synchronized int destroy_function(String name, int nArgs) throws SQLException {
-        int result = FfmNative.destroyFunction(databasePointer(), name, nArgs);
+        int result = SQLiteFfmBindings.destroyFunction(databasePointer(), name, nArgs);
         if (result == SQLITE_OK) functions.remove(FunctionKey.of(name, nArgs));
         return result;
     }
 
     @Override
-    public synchronized int create_collation(String name, Collation collation) throws SQLException {
-        MemorySegment callback = FfmNative.collationCallbackStub(callbackArena, collation);
-        int result = FfmNative.setCollation(databasePointer(), name, callback);
+    public synchronized int create_collation(String name, SQLiteCollation collation)
+            throws SQLException {
+        MemorySegment callback = SQLiteFfmBindings.collationCallbackStub(callbackArena, collation);
+        int result = SQLiteFfmBindings.setCollation(databasePointer(), name, callback);
         if (result == SQLITE_OK) {
             collations.put(name, collation);
             collationStubs.put(name, callback);
@@ -337,7 +343,7 @@ public final class NativeDB extends DB {
 
     @Override
     public synchronized int destroy_collation(String name) throws SQLException {
-        int result = FfmNative.setCollation(databasePointer(), name, MemorySegment.NULL);
+        int result = SQLiteFfmBindings.setCollation(databasePointer(), name, MemorySegment.NULL);
         if (result == SQLITE_OK) {
             collations.remove(name);
             collationStubs.remove(name);
@@ -347,7 +353,7 @@ public final class NativeDB extends DB {
 
     @Override
     public synchronized int limit(int id, int value) throws SQLException {
-        return FfmNative.limit(databasePointer(), id, value);
+        return SQLiteFfmBindings.limit(databasePointer(), id, value);
     }
 
     @Override
@@ -371,7 +377,7 @@ public final class NativeDB extends DB {
             int nTimeouts,
             int pagesPerStep)
             throws SQLException {
-        return FfmNative.copyDatabase(
+        return SQLiteFfmBindings.copyDatabase(
                 databasePointer(),
                 dbName,
                 destFileName,
@@ -403,7 +409,7 @@ public final class NativeDB extends DB {
             int nTimeouts,
             int pagesPerStep)
             throws SQLException {
-        return FfmNative.copyDatabase(
+        return SQLiteFfmBindings.copyDatabase(
                 databasePointer(),
                 dbName,
                 sourceFileName,
@@ -421,7 +427,7 @@ public final class NativeDB extends DB {
         long database = databasePointer();
         for (int column = 0; column < columns; column++) {
             metadata[column] =
-                    FfmNative.columnMetadata(
+                    SQLiteFfmBindings.columnMetadata(
                             database, column_table_name(stmt, column), column_name(stmt, column));
         }
         return metadata;
@@ -431,10 +437,10 @@ public final class NativeDB extends DB {
     synchronized void set_commit_listener(boolean enabled) {
         try {
             if (enabled && commitHookStub.address() == 0) {
-                commitHookStub = FfmNative.commitCallbackStub(callbackArena, this);
-                rollbackHookStub = FfmNative.rollbackCallbackStub(callbackArena, this);
+                commitHookStub = SQLiteFfmBindings.commitCallbackStub(callbackArena, this);
+                rollbackHookStub = SQLiteFfmBindings.rollbackCallbackStub(callbackArena, this);
             }
-            FfmNative.setTransactionHooks(
+            SQLiteFfmBindings.setTransactionHooks(
                     databasePointer(),
                     enabled ? commitHookStub : MemorySegment.NULL,
                     enabled ? rollbackHookStub : MemorySegment.NULL);
@@ -451,9 +457,9 @@ public final class NativeDB extends DB {
     synchronized void set_update_listener(boolean enabled) {
         try {
             if (enabled && updateHookStub.address() == 0) {
-                updateHookStub = FfmNative.updateCallbackStub(callbackArena, this);
+                updateHookStub = SQLiteFfmBindings.updateCallbackStub(callbackArena, this);
             }
-            FfmNative.setUpdateHook(
+            SQLiteFfmBindings.setUpdateHook(
                     databasePointer(), enabled ? updateHookStub : MemorySegment.NULL);
             if (!enabled) updateHookStub = MemorySegment.NULL;
         } catch (SQLException error) {
@@ -462,18 +468,18 @@ public final class NativeDB extends DB {
     }
 
     @Override
-    public synchronized void register_progress_handler(int vmCalls, ProgressHandler handler)
+    public synchronized void register_progress_handler(int vmCalls, SQLiteProgressHandler handler)
             throws SQLException {
         if (handler == null) throw new SQLException("Progress handler cannot be null");
-        MemorySegment callback = FfmNative.progressCallbackStub(callbackArena, handler);
-        FfmNative.setProgressHandler(databasePointer(), vmCalls, callback);
+        MemorySegment callback = SQLiteFfmBindings.progressCallbackStub(callbackArena, handler);
+        SQLiteFfmBindings.setProgressHandler(databasePointer(), vmCalls, callback);
         progressHandler = handler;
         progressHandlerStub = callback;
     }
 
     @Override
     public synchronized void clear_progress_handler() throws SQLException {
-        FfmNative.setProgressHandler(databasePointer(), 0, MemorySegment.NULL);
+        SQLiteFfmBindings.setProgressHandler(databasePointer(), 0, MemorySegment.NULL);
         progressHandler = null;
         progressHandlerStub = MemorySegment.NULL;
     }
@@ -496,12 +502,12 @@ public final class NativeDB extends DB {
 
     @Override
     public synchronized byte[] serialize(String schema) throws SQLException {
-        return FfmNative.serialize(databasePointer(), schema);
+        return SQLiteFfmBindings.serialize(databasePointer(), schema);
     }
 
     @Override
     public synchronized void deserialize(String schema, byte[] buffer) throws SQLException {
-        FfmNative.deserialize(databasePointer(), schema, buffer);
+        SQLiteFfmBindings.deserialize(databasePointer(), schema, buffer);
     }
 
     static byte[] stringToUtf8ByteArray(String value) {

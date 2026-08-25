@@ -26,7 +26,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** These tests are designed to stress Statements on memory databases. */
-public class DBMetaDataTest {
+public class DatabaseMetaDataTest {
     private Connection conn;
     private Statement stat;
     private DatabaseMetaData meta;
@@ -1744,12 +1744,12 @@ public class DBMetaDataTest {
     @Test
     @DisabledInNativeImage // assertj Assumptions do not work in native-image tests
     public void version() throws Exception {
-        assumeThat(Utils.getCompileOptions(conn))
+        assumeThat(TestSupport.getCompileOptions(conn))
                 .as("Can't check the version if not compiled by us")
                 .contains("JDBC_EXTENSIONS");
         Properties version;
         try (InputStream resourceAsStream =
-                DBMetaDataTest.class.getResourceAsStream(
+                DatabaseMetaDataTest.class.getResourceAsStream(
                         "/META-INF/maven/io.github.idoly/sqlite-jdbc/VERSION")) {
             version = new Properties();
             assumeThat(resourceAsStream).isNotNull();

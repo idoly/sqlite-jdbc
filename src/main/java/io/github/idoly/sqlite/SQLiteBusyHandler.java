@@ -4,7 +4,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 /** https://www.sqlite.org/c3ref/busy_handler.html */
-public abstract class BusyHandler {
+public abstract class SQLiteBusyHandler {
 
     /**
      * commit the busy handler for the connection.
@@ -12,7 +12,7 @@ public abstract class BusyHandler {
      * @param connection the SQLite connection
      * @param handler the busyHandler
      */
-    private static void installHandler(Connection connection, BusyHandler handler)
+    private static void installHandler(Connection connection, SQLiteBusyHandler handler)
             throws SQLException {
         if (!(connection instanceof SQLiteConnection sqliteConnection)) {
             throw new SQLException("connection must be a SQLite connection");
@@ -27,7 +27,8 @@ public abstract class BusyHandler {
      * @param connection the SQLite connection
      * @param handler the busyHandler
      */
-    public static void setHandler(Connection connection, BusyHandler handler) throws SQLException {
+    public static void setHandler(Connection connection, SQLiteBusyHandler handler)
+            throws SQLException {
         installHandler(connection, handler);
     }
 

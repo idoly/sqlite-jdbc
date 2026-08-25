@@ -25,7 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** These tests are designed to stress PreparedStatements on memory dbs. */
-public class PrepStmtTest {
+public class PreparedStatementTest {
     static byte[] b1 = new byte[] {1, 2, 7, 4, 2, 6, 2, 8, 5, 2, 3, 1, 5, 3, 6, 3, 3, 6, 2, 5};
     static byte[] b2 = getUtf8Bytes("To be or not to be.");
     static byte[] b3 = getUtf8Bytes("Question!#$%");

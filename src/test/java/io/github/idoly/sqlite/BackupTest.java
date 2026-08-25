@@ -12,7 +12,7 @@ package io.github.idoly.sqlite;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-import io.github.idoly.sqlite.core.DB;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.io.File;
 import java.io.IOException;
 import java.sql.*;
@@ -30,7 +30,7 @@ public class BackupTest {
         File tmpFile = File.createTempFile("backup-test", ".sqlite", tempDir);
 
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:")) {
-            // memory DB to file
+            // memory database to file
             try (Statement stmt = conn.createStatement()) {
                 createTableAndInsertRows(stmt);
 
@@ -65,7 +65,7 @@ public class BackupTest {
         File tmpFile = File.createTempFile("backup-test", ".sqlite", tempDir);
 
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:")) {
-            // memory DB to file
+            // memory database to file
             try (Statement stmt = conn.createStatement()) {
                 createTableAndInsertRows(stmt);
                 // This fails because we cannot write to a file starting with "("
@@ -108,8 +108,9 @@ public class BackupTest {
     void testProgress() throws Exception {
         File tmpFile = File.createTempFile("backup-test", ".sqlite", tempDir);
 
-        try (SQLiteConnection conn = JDBC.createConnection("jdbc:sqlite:", new Properties())) {
-            // memory DB to file
+        try (SQLiteConnection conn =
+                SQLiteDriver.createConnection("jdbc:sqlite:", new Properties())) {
+            // memory database to file
             try (Statement stmt = conn.createStatement()) {
                 createTableAndInsertRows(stmt);
             }
@@ -117,7 +118,7 @@ public class BackupTest {
             // Check that the native backup callback reports progress.
             AtomicInteger remainingStore = new AtomicInteger(-1);
             AtomicInteger pageCountStore = new AtomicInteger(-1);
-            DB.ProgressObserver progressObserver =
+            SQLiteDatabase.ProgressObserver progressObserver =
                     (remaining, pageCount) -> {
                         remainingStore.set(remaining);
                         pageCountStore.set(pageCount);

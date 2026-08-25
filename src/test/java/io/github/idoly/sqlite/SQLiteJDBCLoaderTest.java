@@ -83,10 +83,10 @@ public class SQLiteJDBCLoaderTest {
 
     @Test
     public void function() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 connection,
                 "total",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     protected void xFunc() throws SQLException {
                         int sum = 0;

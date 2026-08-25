@@ -17,7 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** Tests User Defined Functions. */
-public class UDFTest {
+public class UserDefinedFunctionTest {
     private static int val = 0;
     private static final byte[] b1 = new byte[] {2, 5, -4, 8, -1, 3, -5};
     private static int gotTrigger = 0;
@@ -39,10 +39,10 @@ public class UDFTest {
 
     @Test
     public void calling() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f1",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() {
                         val = 4;
@@ -54,10 +54,10 @@ public class UDFTest {
 
     @Test
     public void returning() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f2",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(4);
@@ -78,10 +78,10 @@ public class UDFTest {
 
     @Test
     public void accessArgs() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f3",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(value_int(0));
@@ -97,10 +97,10 @@ public class UDFTest {
 
     @Test
     public void multipleArgs() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f4",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         int ret = 0;
@@ -125,10 +125,10 @@ public class UDFTest {
 
     @Test
     public void returnTypes() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f5",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result("Hello World");
@@ -138,10 +138,10 @@ public class UDFTest {
         assertThat(rs.next()).isTrue();
         assertThat(rs.getString(1)).isEqualTo("Hello World");
 
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f6",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(Long.MAX_VALUE);
@@ -152,10 +152,10 @@ public class UDFTest {
         assertThat(rs.next()).isTrue();
         assertThat(rs.getLong(1)).isEqualTo(Long.MAX_VALUE);
 
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f7",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(Double.MAX_VALUE);
@@ -166,10 +166,10 @@ public class UDFTest {
         assertThat(rs.next()).isTrue();
         assertThat(Double.MAX_VALUE).isCloseTo(rs.getDouble(1), offset(0.0001));
 
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f8",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(b1);
@@ -183,10 +183,10 @@ public class UDFTest {
 
     @Test
     public void returnArgInt() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "farg_int",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(value_int(0));
@@ -202,10 +202,10 @@ public class UDFTest {
 
     @Test
     public void returnArgLong() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "farg_long",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(value_long(0));
@@ -221,10 +221,10 @@ public class UDFTest {
 
     @Test
     public void returnArgDouble() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "farg_doub",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(value_double(0));
@@ -240,10 +240,10 @@ public class UDFTest {
 
     @Test
     public void returnArgBlob() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "farg_blob",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(value_blob(0));
@@ -259,10 +259,10 @@ public class UDFTest {
 
     @Test
     public void returnArgString() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "farg_str",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(value_text(0));
@@ -278,10 +278,10 @@ public class UDFTest {
 
     @Test
     public void trigger() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "inform",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     protected void xFunc() throws SQLException {
                         gotTrigger = value_int(0);
@@ -297,10 +297,10 @@ public class UDFTest {
 
     @Test
     public void aggregate() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "mySum",
-                new Function.Aggregate() {
+                new SQLiteFunction.Aggregate() {
                     private int val = 0;
 
                     @Override
@@ -328,10 +328,10 @@ public class UDFTest {
 
     @Test
     public void window() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "mySum",
-                new Function.Window() {
+                new SQLiteFunction.Window() {
                     private int val = 0;
 
                     @Override
@@ -383,10 +383,10 @@ public class UDFTest {
 
     @Test
     public void destroy() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f1",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() {
                         val = 9;
@@ -395,16 +395,16 @@ public class UDFTest {
         stat.executeQuery("select f1();").close();
         assertThat(val).isEqualTo(9);
 
-        Function.destroy(conn, "f1");
-        Function.destroy(conn, "f1");
+        SQLiteFunction.destroy(conn, "f1");
+        SQLiteFunction.destroy(conn, "f1");
     }
 
     @Test
     public void functionsCanBeOverloadedByArgumentCount() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "overloaded",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     protected void xFunc() throws SQLException {
                         result(0);
@@ -412,10 +412,10 @@ public class UDFTest {
                 },
                 0,
                 0);
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "OVERLOADED",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     protected void xFunc() throws SQLException {
                         result(value_int(0));
@@ -430,7 +430,7 @@ public class UDFTest {
             assertThat(result.getInt(2)).isEqualTo(7);
         }
 
-        Function.destroy(conn, "Overloaded", 1);
+        SQLiteFunction.destroy(conn, "Overloaded", 1);
         assertThatThrownBy(() -> stat.executeQuery("select overloaded(7)"))
                 .isInstanceOf(SQLException.class);
         try (ResultSet result = stat.executeQuery("select overloaded()")) {
@@ -441,100 +441,100 @@ public class UDFTest {
 
     @Test
     public void manyfunctions() throws SQLException {
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f1",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(1);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f2",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(2);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f3",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(3);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f4",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(4);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f5",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(5);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f6",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(6);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f7",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(7);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f8",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(8);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f9",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(9);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f10",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(10);
                     }
                 });
-        Function.create(
+        SQLiteFunction.create(
                 conn,
                 "f11",
-                new Function() {
+                new SQLiteFunction() {
                     @Override
                     public void xFunc() throws SQLException {
                         result(11);
@@ -552,8 +552,8 @@ public class UDFTest {
 
     @Test
     public void multipleThreads() throws Exception {
-        Function func =
-                new Function() {
+        SQLiteFunction func =
+                new SQLiteFunction() {
                     int sum = 0;
 
                     @Override
@@ -570,7 +570,7 @@ public class UDFTest {
                         return String.valueOf(sum);
                     }
                 };
-        Function.create(conn, "func", func);
+        SQLiteFunction.create(conn, "func", func);
         stat.executeUpdate("create table foo (col integer);");
         stat.executeUpdate(
                 "create trigger foo_trigger after insert on foo begin"

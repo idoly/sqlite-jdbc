@@ -6,11 +6,11 @@ import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
-import io.github.idoly.sqlite.BusyHandler;
-import io.github.idoly.sqlite.Collation;
-import io.github.idoly.sqlite.Function;
-import io.github.idoly.sqlite.ProgressHandler;
-import io.github.idoly.sqlite.util.LibraryLoaderUtil;
+import io.github.idoly.sqlite.SQLiteBusyHandler;
+import io.github.idoly.sqlite.SQLiteCollation;
+import io.github.idoly.sqlite.SQLiteFunction;
+import io.github.idoly.sqlite.SQLiteProgressHandler;
+import io.github.idoly.sqlite.util.NativeLibraryResource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.foreign.Arena;
@@ -31,7 +31,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Direct JDK FFM binding to SQLite's public C ABI. */
-final class FfmNative {
+final class SQLiteFfmBindings {
     private static final long MAX_C_STRING_BYTES = 1024L * 1024L;
     private static final int SQLITE_UTF8 = 1;
     private static final int SQLITE_OPEN_READONLY = 0x00000001;
@@ -244,17 +244,18 @@ final class FfmNative {
             callbackHandle(
                     "busyCallback",
                     MethodType.methodType(
-                            int.class, BusyHandler.class, MemorySegment.class, int.class));
+                            int.class, SQLiteBusyHandler.class, MemorySegment.class, int.class));
     private static final MethodHandle PROGRESS_CALLBACK =
             callbackHandle(
                     "progressCallback",
-                    MethodType.methodType(int.class, ProgressHandler.class, MemorySegment.class));
+                    MethodType.methodType(
+                            int.class, SQLiteProgressHandler.class, MemorySegment.class));
     private static final MethodHandle COLLATION_CALLBACK =
             callbackHandle(
                     "collationCallback",
                     MethodType.methodType(
                             int.class,
-                            Collation.class,
+                            SQLiteCollation.class,
                             MemorySegment.class,
                             int.class,
                             MemorySegment.class,
@@ -265,7 +266,7 @@ final class FfmNative {
                     "updateCallback",
                     MethodType.methodType(
                             void.class,
-                            NativeDB.class,
+                            FfmDatabase.class,
                             MemorySegment.class,
                             int.class,
                             MemorySegment.class,
@@ -274,11 +275,11 @@ final class FfmNative {
     private static final MethodHandle COMMIT_CALLBACK =
             callbackHandle(
                     "commitCallback",
-                    MethodType.methodType(int.class, NativeDB.class, MemorySegment.class));
+                    MethodType.methodType(int.class, FfmDatabase.class, MemorySegment.class));
     private static final MethodHandle ROLLBACK_CALLBACK =
             callbackHandle(
                     "rollbackCallback",
-                    MethodType.methodType(void.class, NativeDB.class, MemorySegment.class));
+                    MethodType.methodType(void.class, FfmDatabase.class, MemorySegment.class));
     private static final MethodHandle FUNCTION_CALLBACK =
             callbackHandle(
                     "functionCallback",
@@ -321,7 +322,7 @@ final class FfmNative {
                     "sqlite3_extended_result_codes",
                     FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
 
-    private FfmNative() {}
+    private SQLiteFfmBindings() {}
 
     static boolean initialize() {
         return !libraryVersion().isBlank();
@@ -644,7 +645,7 @@ final class FfmNative {
             String schema,
             String filename,
             boolean restore,
-            DB.ProgressObserver observer,
+            SQLiteDatabase.ProgressObserver observer,
             int sleepTimeMillis,
             int timeoutLimit,
             int pagesPerStep)
@@ -680,28 +681,30 @@ final class FfmNative {
             int timeouts = 0;
             do {
                 result = (int) BACKUP_STEP.invokeExact(address(backup), pagesPerStep);
-                if ((result == Codes.SQLITE_OK || result == Codes.SQLITE_DONE)
+                if ((result == SQLiteResultCodes.SQLITE_OK
+                                || result == SQLiteResultCodes.SQLITE_DONE)
                         && observer != null) {
                     int remaining = (int) BACKUP_REMAINING.invokeExact(address(backup));
                     int pageCount = (int) BACKUP_PAGE_COUNT.invokeExact(address(backup));
                     observer.progress(remaining, pageCount);
                 }
-                if (result == Codes.SQLITE_BUSY || result == Codes.SQLITE_LOCKED) {
+                if (result == SQLiteResultCodes.SQLITE_BUSY
+                        || result == SQLiteResultCodes.SQLITE_LOCKED) {
                     if (timeouts++ >= timeoutLimit) break;
                     try {
                         Thread.sleep(sleepTimeMillis);
                     } catch (InterruptedException interrupted) {
                         Thread.currentThread().interrupt();
-                        return Codes.SQLITE_INTERRUPT;
+                        return SQLiteResultCodes.SQLITE_INTERRUPT;
                     }
                 }
-            } while (result == Codes.SQLITE_OK
-                    || result == Codes.SQLITE_BUSY
-                    || result == Codes.SQLITE_LOCKED);
+            } while (result == SQLiteResultCodes.SQLITE_OK
+                    || result == SQLiteResultCodes.SQLITE_BUSY
+                    || result == SQLiteResultCodes.SQLITE_LOCKED);
 
             int finishResult = (int) BACKUP_FINISH.invokeExact(address(backup));
             backup = 0;
-            if (result != Codes.SQLITE_DONE) return result;
+            if (result != SQLiteResultCodes.SQLITE_DONE) return result;
             return finishResult;
         } catch (Throwable error) {
             throw failure(restore ? "restore database" : "backup database", error);
@@ -715,12 +718,13 @@ final class FfmNative {
             }
             int closeResult = close(fileDatabase);
             if (closeResult != 0) {
-                throw DB.newSQLException(closeResult, "Could not close backup database");
+                throw SQLiteDatabase.newSQLException(
+                        closeResult, "Could not close backup database");
             }
         }
     }
 
-    static MemorySegment busyCallbackStub(Arena arena, BusyHandler handler) {
+    static MemorySegment busyCallbackStub(Arena arena, SQLiteBusyHandler handler) {
         return LINKER.upcallStub(
                 MethodHandles.insertArguments(BUSY_CALLBACK, 0, handler),
                 FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT),
@@ -735,7 +739,7 @@ final class FfmNative {
         }
     }
 
-    static MemorySegment progressCallbackStub(Arena arena, ProgressHandler handler) {
+    static MemorySegment progressCallbackStub(Arena arena, SQLiteProgressHandler handler) {
         return LINKER.upcallStub(
                 MethodHandles.insertArguments(PROGRESS_CALLBACK, 0, handler),
                 FunctionDescriptor.of(JAVA_INT, ADDRESS),
@@ -751,7 +755,7 @@ final class FfmNative {
         }
     }
 
-    static MemorySegment collationCallbackStub(Arena arena, Collation collation) {
+    static MemorySegment collationCallbackStub(Arena arena, SQLiteCollation collation) {
         return LINKER.upcallStub(
                 MethodHandles.insertArguments(COLLATION_CALLBACK, 0, collation),
                 FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS),
@@ -774,7 +778,7 @@ final class FfmNative {
         }
     }
 
-    static MemorySegment updateCallbackStub(Arena arena, NativeDB database) {
+    static MemorySegment updateCallbackStub(Arena arena, FfmDatabase database) {
         return LINKER.upcallStub(
                 MethodHandles.insertArguments(UPDATE_CALLBACK, 0, database),
                 FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT, ADDRESS, ADDRESS, JAVA_LONG),
@@ -792,14 +796,14 @@ final class FfmNative {
         }
     }
 
-    static MemorySegment commitCallbackStub(Arena arena, NativeDB database) {
+    static MemorySegment commitCallbackStub(Arena arena, FfmDatabase database) {
         return LINKER.upcallStub(
                 MethodHandles.insertArguments(COMMIT_CALLBACK, 0, database),
                 FunctionDescriptor.of(JAVA_INT, ADDRESS),
                 arena);
     }
 
-    static MemorySegment rollbackCallbackStub(Arena arena, NativeDB database) {
+    static MemorySegment rollbackCallbackStub(Arena arena, FfmDatabase database) {
         return LINKER.upcallStub(
                 MethodHandles.insertArguments(ROLLBACK_CALLBACK, 0, database),
                 FunctionDescriptor.ofVoid(ADDRESS),
@@ -827,7 +831,7 @@ final class FfmNative {
             Arena arena,
             long database,
             String name,
-            Function function,
+            SQLiteFunction function,
             int argumentCount,
             int flags)
             throws SQLException {
@@ -835,7 +839,7 @@ final class FfmNative {
         try (Arena strings = Arena.ofConfined()) {
             int encoding = SQLITE_UTF8 | flags;
             int result;
-            if (function instanceof Function.Window) {
+            if (function instanceof SQLiteFunction.Window) {
                 registration.step =
                         callbackStub(arena, STEP_CALLBACK, registration, functionArgsDescriptor());
                 registration.finish =
@@ -858,7 +862,7 @@ final class FfmNative {
                                         registration.value,
                                         registration.inverse,
                                         MemorySegment.NULL);
-            } else if (function instanceof Function.Aggregate) {
+            } else if (function instanceof SQLiteFunction.Aggregate) {
                 registration.step =
                         callbackStub(arena, STEP_CALLBACK, registration, functionArgsDescriptor());
                 registration.finish =
@@ -892,7 +896,7 @@ final class FfmNative {
                                         MemorySegment.NULL,
                                         MemorySegment.NULL);
             }
-            if (result != 0) throw DB.newSQLException(result, errorMessage(database));
+            if (result != 0) throw SQLiteDatabase.newSQLException(result, errorMessage(database));
             return registration;
         } catch (Throwable error) {
             throw failure("create SQLite function", error);
@@ -981,7 +985,7 @@ final class FfmNative {
         }
     }
 
-    static String valueText(Function function, int argument) throws SQLException {
+    static String valueText(SQLiteFunction function, int argument) throws SQLException {
         try {
             MemorySegment value = functionArgument(function, argument);
             MemorySegment text = (MemorySegment) VALUE_TEXT.invokeExact(value);
@@ -993,7 +997,7 @@ final class FfmNative {
         }
     }
 
-    static byte[] valueBlob(Function function, int argument) throws SQLException {
+    static byte[] valueBlob(SQLiteFunction function, int argument) throws SQLException {
         try {
             MemorySegment value = functionArgument(function, argument);
             MemorySegment blob = (MemorySegment) VALUE_BLOB.invokeExact(value);
@@ -1005,7 +1009,7 @@ final class FfmNative {
         }
     }
 
-    static double valueDouble(Function function, int argument) throws SQLException {
+    static double valueDouble(SQLiteFunction function, int argument) throws SQLException {
         try {
             return (double) VALUE_DOUBLE.invokeExact(functionArgument(function, argument));
         } catch (Throwable error) {
@@ -1013,7 +1017,7 @@ final class FfmNative {
         }
     }
 
-    static long valueLong(Function function, int argument) throws SQLException {
+    static long valueLong(SQLiteFunction function, int argument) throws SQLException {
         try {
             return (long) VALUE_LONG.invokeExact(functionArgument(function, argument));
         } catch (Throwable error) {
@@ -1021,7 +1025,7 @@ final class FfmNative {
         }
     }
 
-    static int valueInt(Function function, int argument) throws SQLException {
+    static int valueInt(SQLiteFunction function, int argument) throws SQLException {
         try {
             return (int) VALUE_INT.invokeExact(functionArgument(function, argument));
         } catch (Throwable error) {
@@ -1029,7 +1033,7 @@ final class FfmNative {
         }
     }
 
-    static int valueType(Function function, int argument) throws SQLException {
+    static int valueType(SQLiteFunction function, int argument) throws SQLException {
         try {
             return (int) VALUE_TYPE.invokeExact(functionArgument(function, argument));
         } catch (Throwable error) {
@@ -1046,8 +1050,10 @@ final class FfmNative {
                                     address(database), arena.allocateFrom(schema), sizeOut, 0);
             if (data.address() == 0) {
                 int result = (int) ERROR_CODE.invokeExact(address(database));
-                throw DB.newSQLException(
-                        result == Codes.SQLITE_OK ? Codes.SQLITE_NOMEM : result,
+                throw SQLiteDatabase.newSQLException(
+                        result == SQLiteResultCodes.SQLITE_OK
+                                ? SQLiteResultCodes.SQLITE_NOMEM
+                                : result,
                         "Serialization failed");
             }
             long size = sizeOut.get(JAVA_LONG, 0);
@@ -1083,7 +1089,7 @@ final class FfmNative {
             // image.
             nativeBuffer = MemorySegment.NULL;
             if (result != 0) {
-                throw DB.newSQLException(result, errorMessage(database));
+                throw SQLiteDatabase.newSQLException(result, errorMessage(database));
             }
         } catch (Throwable error) {
             if (nativeBuffer.address() != 0) {
@@ -1111,7 +1117,7 @@ final class FfmNative {
         return FunctionDescriptor.ofVoid(ADDRESS);
     }
 
-    private static MemorySegment functionArgument(Function function, int argument) {
+    private static MemorySegment functionArgument(SQLiteFunction function, int argument) {
         MemorySegment values =
                 address(function.argumentValuesAddress())
                         .reinterpret((argument + 1L) * ADDRESS.byteSize());
@@ -1128,7 +1134,7 @@ final class FfmNative {
     }
 
     private static int busyCallback(
-            BusyHandler handler, MemorySegment ignored, int previousInvocations) {
+            SQLiteBusyHandler handler, MemorySegment ignored, int previousInvocations) {
         try {
             return handler.invokeCallback(previousInvocations);
         } catch (Throwable ignoredFailure) {
@@ -1136,7 +1142,7 @@ final class FfmNative {
         }
     }
 
-    private static int progressCallback(ProgressHandler handler, MemorySegment ignored) {
+    private static int progressCallback(SQLiteProgressHandler handler, MemorySegment ignored) {
         try {
             return handler.invokeProgress();
         } catch (Throwable ignoredFailure) {
@@ -1145,7 +1151,7 @@ final class FfmNative {
     }
 
     private static int collationCallback(
-            Collation collation,
+            SQLiteCollation collation,
             MemorySegment ignored,
             int firstLength,
             MemorySegment first,
@@ -1167,7 +1173,7 @@ final class FfmNative {
     }
 
     private static void updateCallback(
-            NativeDB database,
+            FfmDatabase database,
             MemorySegment ignored,
             int type,
             MemorySegment databaseName,
@@ -1180,7 +1186,7 @@ final class FfmNative {
         }
     }
 
-    private static int commitCallback(NativeDB database, MemorySegment ignored) {
+    private static int commitCallback(FfmDatabase database, MemorySegment ignored) {
         try {
             database.onCommit(true);
             return 0;
@@ -1189,7 +1195,7 @@ final class FfmNative {
         }
     }
 
-    private static void rollbackCallback(NativeDB database, MemorySegment ignored) {
+    private static void rollbackCallback(FfmDatabase database, MemorySegment ignored) {
         try {
             database.onCommit(false);
         } catch (Throwable ignoredFailure) {
@@ -1215,7 +1221,7 @@ final class FfmNative {
             int arguments,
             MemorySegment values) {
         try {
-            Function.Aggregate aggregate = registration.aggregate(context, true);
+            SQLiteFunction.Aggregate aggregate = registration.aggregate(context, true);
             aggregate.invokeStep(context.address(), values.address(), arguments);
         } catch (Throwable failure) {
             callbackError(context, failure);
@@ -1228,7 +1234,8 @@ final class FfmNative {
             int arguments,
             MemorySegment values) {
         try {
-            Function.Window window = (Function.Window) registration.aggregate(context, false);
+            SQLiteFunction.Window window =
+                    (SQLiteFunction.Window) registration.aggregate(context, false);
             if (window != null)
                 window.invokeInverse(context.address(), values.address(), arguments);
         } catch (Throwable failure) {
@@ -1238,7 +1245,8 @@ final class FfmNative {
 
     private static void valueCallback(FunctionRegistration registration, MemorySegment context) {
         try {
-            Function.Window window = (Function.Window) registration.aggregate(context, false);
+            SQLiteFunction.Window window =
+                    (SQLiteFunction.Window) registration.aggregate(context, false);
             if (window != null) window.invokeValue(context.address());
         } catch (Throwable failure) {
             callbackError(context, failure);
@@ -1247,7 +1255,7 @@ final class FfmNative {
 
     private static void finalCallback(FunctionRegistration registration, MemorySegment context) {
         try {
-            Function.Aggregate aggregate = registration.removeAggregate(context);
+            SQLiteFunction.Aggregate aggregate = registration.removeAggregate(context);
             if (aggregate != null) aggregate.invokeFinal(context.address());
         } catch (Throwable failure) {
             callbackError(context, failure);
@@ -1265,26 +1273,26 @@ final class FfmNative {
     }
 
     static final class FunctionRegistration {
-        final Function template;
-        final Map<Long, Function.Aggregate> aggregates = new ConcurrentHashMap<>();
+        final SQLiteFunction template;
+        final Map<Long, SQLiteFunction.Aggregate> aggregates = new ConcurrentHashMap<>();
         MemorySegment scalar = MemorySegment.NULL;
         MemorySegment step = MemorySegment.NULL;
         MemorySegment finish = MemorySegment.NULL;
         MemorySegment value = MemorySegment.NULL;
         MemorySegment inverse = MemorySegment.NULL;
 
-        FunctionRegistration(Function template) {
+        FunctionRegistration(SQLiteFunction template) {
             this.template = template;
         }
 
-        Function.Aggregate aggregate(MemorySegment context, boolean create) throws Throwable {
+        SQLiteFunction.Aggregate aggregate(MemorySegment context, boolean create) throws Throwable {
             long key = aggregateKey(context, create);
             if (key == 0) return null;
             if (!create) return aggregates.get(key);
             return aggregates.computeIfAbsent(key, ignored -> cloneAggregate());
         }
 
-        Function.Aggregate removeAggregate(MemorySegment context) throws Throwable {
+        SQLiteFunction.Aggregate removeAggregate(MemorySegment context) throws Throwable {
             long key = aggregateKey(context, false);
             return key == 0 ? null : aggregates.remove(key);
         }
@@ -1295,9 +1303,9 @@ final class FfmNative {
             return key.address();
         }
 
-        private Function.Aggregate cloneAggregate() {
+        private SQLiteFunction.Aggregate cloneAggregate() {
             try {
-                return (Function.Aggregate) ((Function.Aggregate) template).clone();
+                return (SQLiteFunction.Aggregate) ((SQLiteFunction.Aggregate) template).clone();
             } catch (CloneNotSupportedException error) {
                 throw new IllegalStateException("Could not clone aggregate function", error);
             }
@@ -1306,7 +1314,7 @@ final class FfmNative {
 
     private static MethodHandle callbackHandle(String name, MethodType type) {
         try {
-            return MethodHandles.lookup().findStatic(FfmNative.class, name, type);
+            return MethodHandles.lookup().findStatic(SQLiteFfmBindings.class, name, type);
         } catch (ReflectiveOperationException error) {
             throw new ExceptionInInitializerError(error);
         }
@@ -1348,8 +1356,8 @@ final class FfmNative {
     }
 
     private static Path extractPackagedLibrary() {
-        String libraryName = LibraryLoaderUtil.getNativeLibName();
-        String resource = LibraryLoaderUtil.getNativeLibResourcePath() + "/" + libraryName;
+        String libraryName = NativeLibraryResource.getNativeLibName();
+        String resource = NativeLibraryResource.getNativeLibResourcePath() + "/" + libraryName;
         byte[] libraryBytes = readPackagedLibrary(resource);
         try {
             Path directory = Files.createTempDirectory("sqlite-jdbc-ffm-");
@@ -1367,7 +1375,7 @@ final class FfmNative {
     private static byte[] readPackagedLibrary(String resource) {
         IOException failure = null;
         for (int attempt = 0; attempt < 3; attempt++) {
-            try (InputStream input = FfmNative.class.getResourceAsStream(resource)) {
+            try (InputStream input = SQLiteFfmBindings.class.getResourceAsStream(resource)) {
                 if (input == null) {
                     throw new IllegalStateException(
                             "No packaged SQLite library for "
@@ -1425,7 +1433,7 @@ final class FfmNative {
     }
 
     private static SQLException sqliteException(String message, int resultCode, Throwable cause) {
-        SQLException exception = DB.newSQLException(resultCode, message);
+        SQLException exception = SQLiteDatabase.newSQLException(resultCode, message);
         if (cause != null) exception.initCause(cause);
         return exception;
     }

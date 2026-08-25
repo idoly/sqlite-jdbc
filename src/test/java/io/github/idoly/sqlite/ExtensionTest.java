@@ -74,7 +74,7 @@ public class ExtensionTest {
     @Test
     @DisabledInNativeImage // assertj Assumptions do not work in native-image tests
     public void extFunctions() throws Exception {
-        Utils.assumeJdbcExtensions(conn);
+        TestSupport.assumeJdbcExtensions(conn);
 
         {
             ResultSet rs = stat.executeQuery("select reverse(\"ACGT\")");
@@ -87,7 +87,7 @@ public class ExtensionTest {
     @Test
     @DisabledInNativeImage // assertj Assumptions do not work in native-image tests
     public void dbstat() throws Exception {
-        assumeThat(Utils.getCompileOptions(conn))
+        assumeThat(TestSupport.getCompileOptions(conn))
                 .as("SQLite has to be compiled with ENABLE_DBSTAT_VTAB")
                 .contains("ENABLE_DBSTAT_VTAB");
 

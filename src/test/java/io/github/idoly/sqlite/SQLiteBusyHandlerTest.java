@@ -3,8 +3,8 @@ package io.github.idoly.sqlite;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import io.github.idoly.sqlite.core.DB;
-import io.github.idoly.sqlite.core.NativeDBHelper;
+import io.github.idoly.sqlite.core.FfmDatabaseTestSupport;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-public class BusyHandlerTest {
+public class SQLiteBusyHandlerTest {
     private Connection conn;
     private Statement stat;
     @TempDir Path tempDir;
@@ -58,10 +58,10 @@ public class BusyHandlerTest {
 
         public BusyWork(int threadNum) throws Exception {
             busyWorkConn = createConnection(threadNum);
-            Function.create(
+            SQLiteFunction.create(
                     busyWorkConn,
                     "wait_for_latch",
-                    new Function() {
+                    new SQLiteFunction() {
                         @Override
                         protected void xFunc() throws SQLException {
                             lockedLatch.countDown();
@@ -121,9 +121,9 @@ public class BusyHandlerTest {
     private void basicBusyHandler(int threadNum) throws Exception {
         try (Connection localConn = createConnection(threadNum)) {
             final int[] calls = {0};
-            BusyHandler.setHandler(
+            SQLiteBusyHandler.setHandler(
                     localConn,
-                    new BusyHandler() {
+                    new SQLiteBusyHandler() {
                         @Override
                         protected int callback(int nbPrevInvok) {
                             assertThat(calls[0]).isEqualTo(nbPrevInvok);
@@ -165,9 +165,9 @@ public class BusyHandlerTest {
     @Disabled("This test is very flaky; disabling it for now")
     public void testUnregister() throws Exception {
         final int[] calls = {0};
-        BusyHandler.setHandler(
+        SQLiteBusyHandler.setHandler(
                 conn,
-                new BusyHandler() {
+                new SQLiteBusyHandler() {
                     @Override
                     protected int callback(int nbPrevInvok) {
                         assertThat(calls[0]).isEqualTo(nbPrevInvok);
@@ -194,7 +194,7 @@ public class BusyHandlerTest {
         assertThat(calls[0]).isEqualTo(3);
 
         int totalCalls = calls[0];
-        BusyHandler.clearHandler(conn);
+        SQLiteBusyHandler.clearHandler(conn);
         busyWork = new BusyWork(0);
         busyWork.start();
         // let busyWork block inside insert
@@ -218,28 +218,28 @@ public class BusyHandlerTest {
 
         SQLiteConnection sqliteConnection = (SQLiteConnection) conn;
         setDummyHandler();
-        final DB database = sqliteConnection.getDatabase();
-        assertThat(NativeDBHelper.getBusyHandler(database)).isNotEqualTo(0);
-        BusyHandler.clearHandler(conn);
-        assertThat(NativeDBHelper.getBusyHandler(database)).isEqualTo(0);
-        BusyHandler.clearHandler(conn);
+        final SQLiteDatabase database = sqliteConnection.getDatabase();
+        assertThat(FfmDatabaseTestSupport.getBusyHandler(database)).isNotEqualTo(0);
+        SQLiteBusyHandler.clearHandler(conn);
+        assertThat(FfmDatabaseTestSupport.getBusyHandler(database)).isEqualTo(0);
+        SQLiteBusyHandler.clearHandler(conn);
 
         setDummyHandler();
-        assertThat(NativeDBHelper.getBusyHandler(database)).isNotEqualTo(0);
-        BusyHandler.setHandler(conn, null);
-        assertThat(NativeDBHelper.getBusyHandler(database)).isEqualTo(0);
-        BusyHandler.setHandler(conn, null);
+        assertThat(FfmDatabaseTestSupport.getBusyHandler(database)).isNotEqualTo(0);
+        SQLiteBusyHandler.setHandler(conn, null);
+        assertThat(FfmDatabaseTestSupport.getBusyHandler(database)).isEqualTo(0);
+        SQLiteBusyHandler.setHandler(conn, null);
 
         setDummyHandler();
-        assertThat(NativeDBHelper.getBusyHandler(database)).isNotEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getBusyHandler(database)).isNotEqualTo(0);
         conn.close();
-        assertThat(NativeDBHelper.getBusyHandler(database)).isEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getBusyHandler(database)).isEqualTo(0);
     }
 
     private void setDummyHandler() throws SQLException {
-        BusyHandler.setHandler(
+        SQLiteBusyHandler.setHandler(
                 conn,
-                new BusyHandler() {
+                new SQLiteBusyHandler() {
                     @Override
                     protected int callback(int nbPrevInvok) {
                         return 0;

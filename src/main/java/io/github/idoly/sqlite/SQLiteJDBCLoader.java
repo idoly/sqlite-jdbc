@@ -1,6 +1,6 @@
 package io.github.idoly.sqlite;
 
-import io.github.idoly.sqlite.core.NativeDB;
+import io.github.idoly.sqlite.core.FfmDatabase;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Properties;
@@ -11,7 +11,7 @@ public final class SQLiteJDBCLoader {
 
     /** Initializes the FFM symbol table. */
     public static boolean initialize() {
-        return NativeDB.load();
+        return FfmDatabase.load();
     }
 
     /** Returns the major version of the SQLite JDBC driver. */

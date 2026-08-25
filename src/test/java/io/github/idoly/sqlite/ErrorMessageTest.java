@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import io.github.idoly.sqlite.core.DB;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -107,7 +107,7 @@ public class ErrorMessageTest {
         int errorCode = 1234567890;
         String errorMessage = "fictitious code";
 
-        SQLiteException exception = DB.newSQLException(errorCode, errorMessage);
+        SQLiteException exception = SQLiteDatabase.newSQLException(errorCode, errorMessage);
 
         assertThat(exception.getMessage())
                 .contains(Integer.toString(errorCode))

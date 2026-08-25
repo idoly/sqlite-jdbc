@@ -2,8 +2,8 @@ package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.idoly.sqlite.core.DB;
-import io.github.idoly.sqlite.core.NativeDBHelper;
+import io.github.idoly.sqlite.core.FfmDatabaseTestSupport;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.io.File;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -207,19 +207,19 @@ public class ListenerTest {
     @Test
     public void testUpdateHandlerCleanup() throws Exception {
         SQLiteConnection sqliteConnection = connectionOne;
-        final DB database = sqliteConnection.getDatabase();
+        final SQLiteDatabase database = sqliteConnection.getDatabase();
 
         CountingSQLiteUpdateListener updateListener = new CountingSQLiteUpdateListener();
 
         connectionOne.addUpdateListener(updateListener);
-        assertThat(NativeDBHelper.getUpdateListener(database)).isNotEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getUpdateListener(database)).isNotEqualTo(0);
         connectionOne.removeUpdateListener(updateListener);
-        assertThat(NativeDBHelper.getUpdateListener(database)).isEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getUpdateListener(database)).isEqualTo(0);
 
         connectionOne.addUpdateListener(updateListener);
-        assertThat(NativeDBHelper.getUpdateListener(database)).isNotEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getUpdateListener(database)).isNotEqualTo(0);
         connectionOne.close();
-        assertThat(NativeDBHelper.getUpdateListener(database)).isEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getUpdateListener(database)).isEqualTo(0);
     }
 
     /**
@@ -231,18 +231,18 @@ public class ListenerTest {
     @Test
     public void testCommitHandlerCleanup() throws Exception {
         SQLiteConnection sqliteConnection = connectionOne;
-        final DB database = sqliteConnection.getDatabase();
+        final SQLiteDatabase database = sqliteConnection.getDatabase();
 
         CountingSQLiteCommitListener commitListener = new CountingSQLiteCommitListener();
         connectionOne.addCommitListener(commitListener);
-        assertThat(NativeDBHelper.getCommitListener(database)).isNotEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getCommitListener(database)).isNotEqualTo(0);
         connectionOne.removeCommitListener(commitListener);
-        assertThat(NativeDBHelper.getCommitListener(database)).isEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getCommitListener(database)).isEqualTo(0);
 
         connectionOne.addCommitListener(commitListener);
-        assertThat(NativeDBHelper.getCommitListener(database)).isNotEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getCommitListener(database)).isNotEqualTo(0);
         connectionOne.close();
-        assertThat(NativeDBHelper.getCommitListener(database)).isEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getCommitListener(database)).isEqualTo(0);
     }
 
     @Test

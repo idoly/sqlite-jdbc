@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 
-import io.github.idoly.sqlite.core.DB;
-import io.github.idoly.sqlite.core.NativeDBHelper;
+import io.github.idoly.sqlite.core.FfmDatabaseTestSupport;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -14,7 +14,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-public class ProgressHandlerTest {
+public class SQLiteProgressHandlerTest {
     private Connection conn;
     private Statement stat;
 
@@ -42,27 +42,27 @@ public class ProgressHandlerTest {
 
     @Test
     public void validatesConnectionAndInterval() {
-        ProgressHandler handler =
-                new ProgressHandler() {
+        SQLiteProgressHandler handler =
+                new SQLiteProgressHandler() {
                     @Override
                     protected int progress() {
                         return 0;
                     }
                 };
 
-        assertThatThrownBy(() -> ProgressHandler.clearHandler(null))
+        assertThatThrownBy(() -> SQLiteProgressHandler.clearHandler(null))
                 .isInstanceOf(SQLException.class);
-        assertThatThrownBy(() -> ProgressHandler.setHandler(conn, 0, handler))
+        assertThatThrownBy(() -> SQLiteProgressHandler.setHandler(conn, 0, handler))
                 .isInstanceOf(SQLException.class);
     }
 
     @Test
     public void basicProgressHandler() throws Exception {
         final int[] calls = {0};
-        ProgressHandler.setHandler(
+        SQLiteProgressHandler.setHandler(
                 conn,
                 1,
-                new ProgressHandler() {
+                new SQLiteProgressHandler() {
                     @Override
                     protected int progress() {
                         calls[0]++;
@@ -76,10 +76,10 @@ public class ProgressHandlerTest {
     @Test
     public void testUnregister() throws Exception {
         final int[] calls = {0};
-        ProgressHandler.setHandler(
+        SQLiteProgressHandler.setHandler(
                 conn,
                 1,
-                new ProgressHandler() {
+                new SQLiteProgressHandler() {
                     @Override
                     protected int progress() {
                         calls[0]++;
@@ -89,7 +89,7 @@ public class ProgressHandlerTest {
         workWork();
         assertThat(calls[0]).isGreaterThan(0);
         int totalCalls = calls[0];
-        ProgressHandler.clearHandler(conn);
+        SQLiteProgressHandler.clearHandler(conn);
         workWork();
         assertThat(calls[0]).isEqualTo(totalCalls);
     }
@@ -98,10 +98,10 @@ public class ProgressHandlerTest {
     public void testInterrupt() {
 
         try {
-            ProgressHandler.setHandler(
+            SQLiteProgressHandler.setHandler(
                     conn,
                     1,
-                    new ProgressHandler() {
+                    new SQLiteProgressHandler() {
                         @Override
                         protected int progress() {
                             return 1;
@@ -125,30 +125,30 @@ public class ProgressHandlerTest {
     @Test
     public void testClearProgressHelper() throws Exception {
         SQLiteConnection sqliteConnection = (SQLiteConnection) conn;
-        final DB database = sqliteConnection.getDatabase();
+        final SQLiteDatabase database = sqliteConnection.getDatabase();
         setDummyHandler();
-        assertThat(NativeDBHelper.getProgressHandler(database)).isNotEqualTo(0);
-        ProgressHandler.clearHandler(conn);
-        assertThat(NativeDBHelper.getProgressHandler(database)).isEqualTo(0);
-        ProgressHandler.clearHandler(conn);
+        assertThat(FfmDatabaseTestSupport.getProgressHandler(database)).isNotEqualTo(0);
+        SQLiteProgressHandler.clearHandler(conn);
+        assertThat(FfmDatabaseTestSupport.getProgressHandler(database)).isEqualTo(0);
+        SQLiteProgressHandler.clearHandler(conn);
 
         setDummyHandler();
-        assertThat(NativeDBHelper.getProgressHandler(database)).isNotEqualTo(0);
-        ProgressHandler.setHandler(conn, 1, null);
-        assertThat(NativeDBHelper.getProgressHandler(database)).isEqualTo(0);
-        ProgressHandler.setHandler(conn, 1, null);
+        assertThat(FfmDatabaseTestSupport.getProgressHandler(database)).isNotEqualTo(0);
+        SQLiteProgressHandler.setHandler(conn, 1, null);
+        assertThat(FfmDatabaseTestSupport.getProgressHandler(database)).isEqualTo(0);
+        SQLiteProgressHandler.setHandler(conn, 1, null);
 
         setDummyHandler();
-        assertThat(NativeDBHelper.getProgressHandler(database)).isNotEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getProgressHandler(database)).isNotEqualTo(0);
         conn.close();
-        assertThat(NativeDBHelper.getProgressHandler(database)).isEqualTo(0);
+        assertThat(FfmDatabaseTestSupport.getProgressHandler(database)).isEqualTo(0);
     }
 
     private void setDummyHandler() throws SQLException {
-        ProgressHandler.setHandler(
+        SQLiteProgressHandler.setHandler(
                 conn,
                 1,
-                new ProgressHandler() {
+                new SQLiteProgressHandler() {
                     @Override
                     protected int progress() {
                         return 0;

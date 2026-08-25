@@ -24,11 +24,11 @@ public abstract class CorePreparedStatement extends StatementImpl {
         super(conn);
 
         this.sql = sql;
-        DB db = conn.getDatabase();
+        SQLiteDatabase db = conn.getDatabase();
         db.prepare(this);
-        rs.colsMeta = pointer.safeRun(DB::column_names);
-        columnCount = pointer.safeRunInt(DB::column_count);
-        paramCount = pointer.safeRunInt(DB::bind_parameter_count);
+        rs.colsMeta = pointer.safeRun(SQLiteDatabase::column_names);
+        columnCount = pointer.safeRunInt(SQLiteDatabase::column_count);
+        paramCount = pointer.safeRunInt(SQLiteDatabase::bind_parameter_count);
         batchQueryCount = 0;
         batch = null;
         batchPos = 0;

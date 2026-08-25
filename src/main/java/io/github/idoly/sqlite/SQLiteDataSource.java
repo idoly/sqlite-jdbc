@@ -19,7 +19,7 @@ public class SQLiteDataSource implements DataSource {
     private transient PrintWriter logger;
     private int loginTimeout = 1;
 
-    private String url = JDBC.PREFIX; // use memory database in default
+    private String url = SQLiteDriver.PREFIX; // use memory database in default
     private String databaseName = ""; // the name of the current database
 
     /** Default constructor. */
@@ -360,7 +360,7 @@ public class SQLiteDataSource implements DataSource {
         Properties p = config.toProperties();
         if (username != null) p.put("user", username);
         if (password != null) p.put("pass", password);
-        return JDBC.createConnection(url, p);
+        return SQLiteDriver.createConnection(url, p);
     }
 
     /**
