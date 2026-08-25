@@ -45,61 +45,66 @@ java --enable-native-access=io.github.idoly.sqlite ...
 
 每个 `jdbc:sqlite::memory:` 连接都有独立数据库。需要多个连接共享内存数据库时，应使用带固定名称和 `cache=shared` 的 SQLite URI，并至少保持一个连接存活。
 
-### DriverManager
+### 完整示例
 
-下面的事务要么完整提交两行数据，要么在失败时回滚：
-
-```java
-import java.sql.DriverManager;
-import java.sql.SQLException;
-
-try (var connection = DriverManager.getConnection("jdbc:sqlite:sample.db")) {
-    try (var statement = connection.createStatement()) {
-        statement.executeUpdate(
-                "create table if not exists item(id integer primary key, value text)");
-    }
-
-    connection.setAutoCommit(false);
-    try (var statement = connection.prepareStatement(
-            "insert into item(value) values (?)")) {
-        statement.setString(1, "first");
-        statement.addBatch();
-        statement.setString(1, "second");
-        statement.addBatch();
-        statement.executeBatch();
-        connection.commit();
-    } catch (SQLException error) {
-        connection.rollback();
-        throw error;
-    }
-}
-```
-
-### DataSource
-
-使用 `SQLiteConfig` 集中设置连接参数。配置会在创建连接时应用：
+下面是可直接运行的 `Example.java`。程序创建数据库和表，在一个事务中批量写入两行数据，然后查询并输出全部记录：
 
 ```java
 import io.github.idoly.sqlite.SQLiteConfig;
 import io.github.idoly.sqlite.SQLiteDataSource;
+import java.sql.SQLException;
 
-var config = new SQLiteConfig();
-config.enforceForeignKeys(true);
-config.setJournalMode(SQLiteConfig.JournalMode.WAL);
-config.setBusyTimeout(5_000);
+public final class Example {
+    private Example() {}
 
-var dataSource = new SQLiteDataSource(config);
-dataSource.setUrl("jdbc:sqlite:sample.db");
+    public static void main(String[] args) throws SQLException {
+        var config = new SQLiteConfig();
+        config.enforceForeignKeys(true);
+        config.setJournalMode(SQLiteConfig.JournalMode.WAL);
+        config.setBusyTimeout(5_000);
 
-try (var connection = dataSource.getConnection();
-     var statement = connection.createStatement();
-     var result = statement.executeQuery("select sqlite_version()")) {
-    result.next();
-    System.out.println(result.getString(1));
+        var dataSource = new SQLiteDataSource(config);
+        dataSource.setUrl("jdbc:sqlite:sample.db");
+
+        try (var connection = dataSource.getConnection()) {
+            try (var statement = connection.createStatement()) {
+                statement.executeUpdate(
+                        "create table if not exists item("
+                                + "id integer primary key, value text not null)");
+            }
+
+            connection.setAutoCommit(false);
+            try (var statement = connection.prepareStatement(
+                    "insert into item(value) values (?)")) {
+                statement.setString(1, "first");
+                statement.addBatch();
+                statement.setString(1, "second");
+                statement.addBatch();
+                statement.executeBatch();
+                connection.commit();
+            } catch (SQLException error) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackError) {
+                    error.addSuppressed(rollbackError);
+                }
+                throw error;
+            }
+            connection.setAutoCommit(true);
+
+            try (var statement = connection.createStatement();
+                    var result = statement.executeQuery(
+                            "select id, value from item order by id")) {
+                while (result.next()) {
+                    System.out.printf("%d: %s%n", result.getLong(1), result.getString(2));
+                }
+            }
+        }
+    }
 }
 ```
 
-连接池管理器可使用 `io.github.idoly.sqlite.datasource.SQLiteConnectionPoolDataSource`。它实现 JDBC `ConnectionPoolDataSource`，负责创建 `PooledConnection`；业务代码仍应从池管理器借用并关闭逻辑 `Connection`。
+也可以使用标准 `DriverManager.getConnection("jdbc:sqlite:sample.db")` 创建连接。连接池管理器可使用 `io.github.idoly.sqlite.datasource.SQLiteConnectionPoolDataSource`；它实现 JDBC `ConnectionPoolDataSource`，业务代码应从池管理器借用并关闭逻辑 `Connection`。
 
 ## 构建
 
