@@ -17,7 +17,7 @@ public class SQLiteDriverTest {
         Driver driver = DriverManager.getDriver("jdbc:sqlite:");
         assertThat(driver.getMajorVersion()).isEqualTo(3);
         assertThat(driver.getMinorVersion()).isEqualTo(53);
-        assertThat(SQLiteDriver.getVersion()).isEqualTo("3.53.4.0");
+        assertThat(SQLiteDriver.getVersion()).isEqualTo("3.53.4.1");
 
         try (SQLiteConnection connection =
                 SQLiteDriver.createConnection("jdbc:sqlite:", new Properties())) {

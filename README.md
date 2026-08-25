@@ -113,10 +113,11 @@ public final class Example {
 
 ## 构建
 
-native-image 测试需要 GraalVM，重建内置动态库还需要 Docker 或 Podman。
+native-image 测试需要 GraalVM。普通构建直接使用仓库内已验证的动态库，不需要容器或交叉编译工具链。
 
 ```shell
 mvn spotless:check clean package
 mvn clean -Pnative integration-test
-make native-all
 ```
+
+全部五个平台的 SQLite 动态库由 GitHub Actions 的 `Build Native` workflow 构建并提交。Linux 使用 AlmaLinux 8 保持 glibc 2.28 基线，macOS 使用 GitHub runner 的 Apple clang，Windows 使用固定版本并校验 SHA-256 的 llvm-mingw。使用本机工具链重建当前平台时执行 `make native`。

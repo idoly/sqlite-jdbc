@@ -57,7 +57,7 @@ Mac-x86_64_CCFLAGS := $(COMMON_CCFLAGS) -mmacosx-version-min=11
 Mac-x86_64_LINKFLAGS := -dynamiclib -lpthread -lm
 Mac-x86_64_LIBNAME := libsqlite3.dylib
 
-Mac-aarch64_CC := $(CROSS_PREFIX)clang
+Mac-aarch64_CC := $(CROSS_PREFIX)clang -arch arm64
 Mac-aarch64_STRIP := $(CROSS_PREFIX)strip -x
 Mac-aarch64_CCFLAGS := $(COMMON_CCFLAGS) -mmacosx-version-min=11
 Mac-aarch64_LINKFLAGS := -dynamiclib -lpthread -lm
@@ -87,13 +87,10 @@ SQLITE_AMAL_PREFIX := sqlite-amalgamation-$(SQLITE_VERSION_CODE)
 
 RESOURCE_DIR = src/main/resources
 
-.PHONY: all package native native-all clean clean-native clean-java clean-tests \
-        win64 win-arm64 mac64 mac-arm64 linux64
+.PHONY: all package native clean clean-native clean-java clean-tests
 
 all: package
 
-CONTAINER_ENGINE ?= docker
-DOCKER_RUN_OPTS := --rm
 MVN := mvn
 SQLITE_OUT:=$(TARGET)/$(sqlite)-$(OS_NAME)-$(OS_ARCH)
 SQLITE_OBJ?=$(SQLITE_OUT)/sqlite3.o
@@ -201,8 +198,6 @@ NATIVE_DIR=src/main/resources/io/github/idoly/sqlite/native/$(OS_NAME)/$(OS_ARCH
 NATIVE_TARGET_DIR:=$(TARGET)/classes/io/github/idoly/sqlite/native/$(OS_NAME)/$(OS_ARCH)
 NATIVE_DLL:=$(NATIVE_DIR)/$(LIBNAME)
 
-native-all: win64 win-arm64 mac64 mac-arm64 linux64
-
 native: $(NATIVE_DLL)
 
 $(NATIVE_DLL): $(SQLITE_OUT)/$(LIBNAME)
@@ -210,22 +205,6 @@ $(NATIVE_DLL): $(SQLITE_OUT)/$(LIBNAME)
 	cp $< $@
 	@mkdir -p $(NATIVE_TARGET_DIR)
 	cp $< $(NATIVE_TARGET_DIR)/$(LIBNAME)
-
-win64: $(SQLITE_UNPACKED)
-	OCI_EXE=$(CONTAINER_ENGINE) ./docker/dockcross-windows-x64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=x86_64-w64-mingw32.static- OS_NAME=Windows OS_ARCH=x86_64'
-
-win-arm64: $(SQLITE_UNPACKED)
-	OCI_EXE=$(CONTAINER_ENGINE) ./docker/dockcross-windows-arm64 -a $(DOCKER_RUN_OPTS) bash -c 'make clean-native native CROSS_PREFIX=aarch64-w64-mingw32- OS_NAME=Windows OS_ARCH=aarch64'
-
-linux64: $(SQLITE_UNPACKED)
-	$(CONTAINER_ENGINE) run $(DOCKER_RUN_OPTS) -v $$PWD:/work -w /work docker.io/almalinux:8 sh -c 'dnf install -y gcc make perl && make clean-native native OS_NAME=Linux OS_ARCH=x86_64'
-
-mac64: $(SQLITE_UNPACKED)
-	$(CONTAINER_ENGINE) run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir docker.io/gotson/crossbuild make clean-native native OS_NAME=Mac OS_ARCH=x86_64 CROSS_PREFIX="/usr/osxcross/bin/x86_64-apple-darwin20.4-"
-
-mac-arm64: $(SQLITE_UNPACKED)
-	$(CONTAINER_ENGINE) run $(DOCKER_RUN_OPTS) -v $$PWD:/workdir -e CROSS_TRIPLE=aarch64-apple-darwin docker.io/gotson/crossbuild make clean-native native OS_NAME=Mac OS_ARCH=aarch64 CROSS_PREFIX="/usr/osxcross/bin/aarch64-apple-darwin20.4-"
-
 
 package: native
 	$(MVN) package
