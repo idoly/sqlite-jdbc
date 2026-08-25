@@ -58,7 +58,7 @@ public class SQLiteDriverTest {
 
     @Test
     public void createConnectionAcceptsValidSqliteUrl() throws Exception {
-        try (Connection conn = SQLiteDriver.createConnection("jdbc:sqlite:", new Properties())) {
+        try (Connection conn = SQLiteDriver.createConnection("jdbc:sqlite:", null)) {
             assertThat(conn).isNotNull();
             assertThat(conn.isClosed()).isFalse();
         }
@@ -133,37 +133,18 @@ public class SQLiteDriverTest {
 
     @Test
     public void canSetJdbcConnectionToReadOnlyAfterRollback() throws Exception {
-        System.out.println("Creating JDBC DataSource");
         SQLiteDataSource dataSource = createDatasourceWithExplicitReadonly();
-        System.out.println("Creating JDBC connection");
         try (Connection connection = dataSource.getConnection()) {
-            System.out.println("JDBC connection created");
-            System.out.println("Disabling auto-commit");
             connection.setAutoCommit(false);
-            System.out.println("Creating statement");
-            // execute a statement
             try (Statement statement = connection.createStatement()) {
-                System.out.println("Executing query");
-                boolean success = statement.execute("SELECT * FROM sqlite_schema");
-                assertThat(success).isTrue();
-            } finally {
-                System.out.println("Closing statement");
+                assertThat(statement.execute("SELECT * FROM sqlite_schema")).isTrue();
             }
-            System.out.println("Performing rollback");
             connection.rollback();
 
-            System.out.println("Setting connection to read-only");
-            // try to assign read-only
             connection.setReadOnly(true);
-            // execute a statement
-            try (Statement statement2 = connection.createStatement()) {
-                System.out.println("Executing query 2");
-                boolean success = statement2.execute("SELECT * FROM sqlite_schema");
-                assertThat(success).isTrue();
-            } finally {
-                System.out.println("Closing statement 2");
+            try (Statement statement = connection.createStatement()) {
+                assertThat(statement.execute("SELECT * FROM sqlite_schema")).isTrue();
             }
-            System.out.println("Performing rollback 2");
             connection.rollback();
         }
     }
@@ -298,7 +279,6 @@ public class SQLiteDriverTest {
     // helper methods -----------------------------------------------------------------
 
     private SQLiteDataSource createDatasourceWithExplicitReadonly() {
-        //        DriverManager.setLogWriter(new PrintWriter(System.out));
         SQLiteConfig config = new SQLiteConfig();
         config.setExplicitReadOnly(true);
         config.setBusyTimeout(10000);

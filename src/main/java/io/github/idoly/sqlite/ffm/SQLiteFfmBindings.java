@@ -325,8 +325,8 @@ final class SQLiteFfmBindings {
 
     private SQLiteFfmBindings() {}
 
-    static boolean initialize() {
-        return !libraryVersion().isBlank();
+    static void initialize() {
+        libraryVersion();
     }
 
     static long open(byte[] filename, int flags) throws SQLException {

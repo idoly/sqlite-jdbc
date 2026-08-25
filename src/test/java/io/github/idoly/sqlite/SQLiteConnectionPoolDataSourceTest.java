@@ -175,11 +175,13 @@ public class SQLiteConnectionPoolDataSourceTest {
                     }
                 });
         try {
+            AtomicReference<Runnable> abortTask = new AtomicReference<>();
             Connection handle = pooled.getConnection();
-            handle.abort(Runnable::run);
+            handle.abort(abortTask::set);
             assertThat(handle.isClosed()).isTrue();
             assertThat(errorEvents).hasValue(1);
             assertThatThrownBy(pooled::getConnection).isInstanceOf(SQLException.class);
+            abortTask.get().run();
         } finally {
             pooled.close();
         }
@@ -236,6 +238,24 @@ public class SQLiteConnectionPoolDataSourceTest {
                         .isEqualTo(Connection.TRANSACTION_SERIALIZABLE);
                 assertThat(result.next()).isTrue();
                 assertThat(result.getInt(1)).isZero();
+            }
+        } finally {
+            pooled.close();
+        }
+    }
+
+    @Test
+    public void returningHandleRestoresReadOnlyState() throws SQLException {
+        SQLiteConfig config = new SQLiteConfig();
+        config.setExplicitReadOnly(true);
+        PooledConnection pooled = new SQLiteConnectionPoolDataSource(config).getPooledConnection();
+        try {
+            Connection handle = pooled.getConnection();
+            handle.setReadOnly(true);
+            handle.close();
+
+            try (Connection next = pooled.getConnection()) {
+                assertThat(next.isReadOnly()).isFalse();
             }
         } finally {
             pooled.close();

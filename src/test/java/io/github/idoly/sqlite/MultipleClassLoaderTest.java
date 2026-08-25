@@ -13,11 +13,13 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import org.junit.jupiter.api.AfterEach;
@@ -74,44 +76,42 @@ public class MultipleClassLoaderTest {
         createJar(classesDir, classesDirPrefix, jarFile);
         URL[] jarUrl = new URL[] {jarFile.toPath().toUri().toURL()};
 
-        final AtomicInteger completedThreads = new AtomicInteger(0);
         ExecutorService pool = Executors.newFixedThreadPool(4);
+        List<Future<?>> tasks = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
             final int sleepMillis = i;
-            pool.execute(
-                    () -> {
-                        try {
-                            Thread.sleep(sleepMillis * 10);
-                            // Each isolated driver class loads its own FFM backend.
-                            try (URLClassLoader classLoader =
-                                    new URLClassLoader(
-                                            jarUrl,
-                                            ClassLoader.getSystemClassLoader().getParent())) {
-                                Class<?> driver =
-                                        classLoader.loadClass(
-                                                "io.github.idoly.sqlite.SQLiteDriver");
-                                Method connect =
-                                        driver.getDeclaredMethod(
-                                                "createConnection", String.class, Properties.class);
-                                try (Connection isolated =
-                                        (Connection)
-                                                connect.invoke(
-                                                        null,
-                                                        "jdbc:sqlite::memory:",
-                                                        new Properties())) {
-                                    assertThat(isolated.isValid(0)).isTrue();
+            tasks.add(
+                    pool.submit(
+                            () -> {
+                                Thread.sleep(sleepMillis * 10);
+                                // Each isolated driver class loads its own FFM backend.
+                                try (URLClassLoader classLoader =
+                                        new URLClassLoader(
+                                                jarUrl,
+                                                ClassLoader.getSystemClassLoader().getParent())) {
+                                    Class<?> driver =
+                                            classLoader.loadClass(
+                                                    "io.github.idoly.sqlite.SQLiteDriver");
+                                    Method connect =
+                                            driver.getDeclaredMethod(
+                                                    "createConnection",
+                                                    String.class,
+                                                    Properties.class);
+                                    try (Connection isolated =
+                                            (Connection)
+                                                    connect.invoke(
+                                                            null,
+                                                            "jdbc:sqlite::memory:",
+                                                            new Properties())) {
+                                        assertThat(isolated.isValid(0)).isTrue();
+                                    }
                                 }
-                            }
-                        } catch (Throwable e) {
-                            e.printStackTrace();
-                            fail(e.getLocalizedMessage());
-                        }
-                        completedThreads.incrementAndGet();
-                    });
+                                return null;
+                            }));
         }
         pool.shutdown();
-        pool.awaitTermination(3, TimeUnit.SECONDS);
-        assertThat(completedThreads.get()).isEqualTo(4);
+        for (Future<?> task : tasks) task.get(3, TimeUnit.SECONDS);
+        assertThat(pool.awaitTermination(3, TimeUnit.SECONDS)).isTrue();
     }
 
     private static void createJar(File inputDir, String changeDir, File outputFile)

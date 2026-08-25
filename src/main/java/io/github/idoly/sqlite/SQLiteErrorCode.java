@@ -160,8 +160,8 @@ public enum SQLiteErrorCode {
     SQLITE_READONLY_ROLLBACK(776, "Hot journal needs to be rolled back"),
     SQLITE_WARNING_AUTOINDEX(284, "automatic indexing is used");
 
-    public final int code;
-    public final String message;
+    private final int code;
+    private final String message;
 
     /**
      * Constructor that applies error code and message.
@@ -174,12 +174,20 @@ public enum SQLiteErrorCode {
         this.message = message;
     }
 
+    public int code() {
+        return code;
+    }
+
+    public String message() {
+        return message;
+    }
+
     /**
      * @param errorCode Error code.
      * @return Error message.
      */
     public static SQLiteErrorCode getErrorCode(int errorCode) {
-        for (SQLiteErrorCode each : SQLiteErrorCode.values()) {
+        for (SQLiteErrorCode each : values()) {
             if (errorCode == each.code) return each;
         }
         return UNKNOWN_ERROR;

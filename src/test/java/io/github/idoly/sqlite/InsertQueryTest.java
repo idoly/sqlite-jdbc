@@ -163,7 +163,6 @@ public class InsertQueryTest {
 
             rs.next();
             result = rs.getLong(1);
-            // System.out.println("count = " + result);
 
             rs.close();
             stat.close();

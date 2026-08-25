@@ -206,17 +206,42 @@ public abstract class SQLiteDatabase {
      *     href="https://www.sqlite.org/c3ref/close.html">https://www.sqlite.org/c3ref/close.html</a>
      */
     public final synchronized void close() throws SQLException {
-        // finalize any remaining statements before closing db
-        for (StatementHandle element : stmts) {
-            element.close();
+        SQLException failure = null;
+        for (StatementHandle statement : Set.copyOf(stmts)) {
+            try {
+                statement.close();
+            } catch (SQLException error) {
+                failure = append(failure, error);
+            }
+        }
+        if (begin != null) {
+            try {
+                begin.close();
+            } catch (SQLException error) {
+                failure = append(failure, error);
+            }
+        }
+        if (commit != null) {
+            try {
+                commit.close();
+            } catch (SQLException error) {
+                failure = append(failure, error);
+            }
         }
 
-        // clean up commit object
-        if (begin != null) begin.close();
-        if (commit != null) commit.close();
-
         closed.set(true);
-        _close();
+        try {
+            _close();
+        } catch (SQLException error) {
+            failure = append(failure, error);
+        }
+        if (failure != null) throw failure;
+    }
+
+    private static SQLException append(SQLException failure, SQLException next) {
+        if (failure == null) return next;
+        failure.addSuppressed(next);
+        return failure;
     }
 
     /**

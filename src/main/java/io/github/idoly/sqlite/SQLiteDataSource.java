@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
@@ -19,8 +20,7 @@ public class SQLiteDataSource implements DataSource {
     private transient PrintWriter logger;
     private int loginTimeout = 1;
 
-    private String url = SQLiteDriver.PREFIX; // use memory database in default
-    private String databaseName = ""; // the name of the current database
+    private String url = SQLiteDriver.PREFIX;
 
     /** Default constructor. */
     public SQLiteDataSource() {
@@ -33,7 +33,7 @@ public class SQLiteDataSource implements DataSource {
      * @param config The configuration for the data source.
      */
     public SQLiteDataSource(SQLiteConfig config) {
-        this.config = config;
+        this.config = Objects.requireNonNull(config, "config");
     }
 
     /**
@@ -42,7 +42,7 @@ public class SQLiteDataSource implements DataSource {
      * @param config The configuration.
      */
     public void setConfig(SQLiteConfig config) {
-        this.config = config;
+        this.config = Objects.requireNonNull(config, "config");
     }
 
     /**
@@ -66,23 +66,6 @@ public class SQLiteDataSource implements DataSource {
      */
     public String getUrl() {
         return url;
-    }
-
-    /**
-     * Sets the database name.
-     *
-     * @param databaseName The name of the database
-     */
-    public void setDatabaseName(String databaseName) {
-        this.databaseName = databaseName;
-    }
-
-    /**
-     * @return The name of the database if one was set.
-     * @see SQLiteDataSource#setDatabaseName(String)
-     */
-    public String getDatabaseName() {
-        return databaseName;
     }
 
     /**

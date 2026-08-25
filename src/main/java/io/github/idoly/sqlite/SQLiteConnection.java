@@ -37,7 +37,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -82,8 +82,8 @@ public final class SQLiteConnection implements Connection {
                 if (newDatabase != null) {
                     newDatabase.close();
                 }
-            } catch (Exception e) {
-                t.addSuppressed(e);
+            } catch (Throwable closeError) {
+                t.addSuppressed(closeError);
             }
             throw t;
         }
@@ -240,7 +240,7 @@ public final class SQLiteConnection implements Connection {
             throws SQLException {
         // Create a copy of the given properties
         Properties newProps = new Properties();
-        newProps.putAll(props);
+        if (props != null) newProps.putAll(props);
 
         // Extract pragma as properties
         String fileName = extractPragmasFromFilename(url, origFileName, newProps);
@@ -255,39 +255,46 @@ public final class SQLiteConnection implements Connection {
                 String resourceName = fileName.substring(RESOURCE_NAME_PREFIX.length());
 
                 // search the class path
-                ClassLoader contextCL = Thread.currentThread().getContextClassLoader();
-                URL resourceAddr = contextCL.getResource(resourceName);
+                ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+                URL resourceAddr =
+                        contextClassLoader == null
+                                ? SQLiteConnection.class.getResource("/" + resourceName)
+                                : contextClassLoader.getResource(resourceName);
                 if (resourceAddr == null) {
                     try {
                         resourceAddr = new URI(resourceName).toURL();
-                    } catch (MalformedURLException | URISyntaxException e) {
-                        throw new SQLException(
-                                String.format("resource %s not found: %s", resourceName, e));
+                    } catch (MalformedURLException | URISyntaxException error) {
+                        throw new SQLException("resource " + resourceName + " not found", error);
                     }
                 }
 
                 try {
                     fileName = extractResource(resourceAddr).getAbsolutePath();
-                } catch (IOException e) {
-                    throw new SQLException(String.format("failed to load %s: %s", resourceName, e));
+                } catch (IOException error) {
+                    throw new SQLException("failed to load " + resourceName, error);
                 }
             } else {
                 fileName = new File(fileName).getAbsolutePath();
             }
         }
 
-        // load the FFM database backend
-        SQLiteDatabase db = null;
         try {
             FfmDatabase.load();
-            db = new FfmDatabase(url, fileName, config);
-        } catch (Exception e) {
-            SQLException err = new SQLException("Error opening connection");
-            err.initCause(e);
-            throw err;
+        } catch (ExceptionInInitializerError | NoClassDefFoundError error) {
+            throw new SQLException("Could not initialize the packaged SQLite library", error);
         }
-        db.open(fileName, config.getOpenModeFlags());
-        return db;
+        SQLiteDatabase db = new FfmDatabase(url, fileName, config);
+        try {
+            db.open(fileName, config.getOpenModeFlags());
+            return db;
+        } catch (SQLException | RuntimeException | Error error) {
+            try {
+                db.close();
+            } catch (Throwable closeError) {
+                error.addSuppressed(closeError);
+            }
+            throw error;
+        }
     }
 
     /**
@@ -300,43 +307,25 @@ public final class SQLiteConnection implements Connection {
         if (resourceAddr.getProtocol().equals("file")) {
             try {
                 return new File(resourceAddr.toURI());
-            } catch (URISyntaxException e) {
-                throw new IOException(e.getMessage());
+            } catch (URISyntaxException error) {
+                throw new IOException("Invalid file resource URI: " + resourceAddr, error);
             }
         }
 
-        String tempFolder = new File(System.getProperty("java.io.tmpdir")).getAbsolutePath();
-        String dbFileName = String.format("sqlite-jdbc-tmp-%s.db", UUID.randomUUID());
-        File dbFile = new File(tempFolder, dbFileName);
-
-        if (dbFile.exists()) {
-            long resourceLastModified = resourceAddr.openConnection().getLastModified();
-            long tmpFileLastModified = dbFile.lastModified();
-            if (resourceLastModified < tmpFileLastModified) {
-                return dbFile;
-            } else {
-                // remove the old database file
-                boolean deletionSucceeded = dbFile.delete();
-                if (!deletionSucceeded) {
-                    throw new IOException(
-                            "failed to remove existing database file: " + dbFile.getAbsolutePath());
-                }
+        var databaseFile = Files.createTempFile("sqlite-jdbc-resource-", ".db");
+        databaseFile.toFile().deleteOnExit();
+        URLConnection connection = resourceAddr.openConnection();
+        connection.setUseCaches(false);
+        try (InputStream input = connection.getInputStream()) {
+            Files.copy(input, databaseFile, StandardCopyOption.REPLACE_EXISTING);
+            return databaseFile.toFile();
+        } catch (IOException | RuntimeException error) {
+            try {
+                Files.deleteIfExists(databaseFile);
+            } catch (IOException | RuntimeException deleteError) {
+                error.addSuppressed(deleteError);
             }
-
-            //
-            //            if (md5sum1.equals(md5sum2))
-            //                return dbFile; // no need to extract the database file
-            //            else
-            //            {
-            //            }
-        }
-
-        URLConnection conn = resourceAddr.openConnection();
-        // Disable caches to avoid keeping unnecessary file references after the single-use copy
-        conn.setUseCaches(false);
-        try (InputStream reader = conn.getInputStream()) {
-            Files.copy(reader, dbFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            return dbFile;
+            throw error;
         }
     }
 
@@ -503,39 +492,26 @@ public final class SQLiteConnection implements Connection {
         sb.append(filename.substring(0, parameterDelimiter));
 
         int nonPragmaCount = 0;
+        Set<String> propertyNames = Set.copyOf(prop.stringPropertyNames());
         String[] parameters = filename.substring(parameterDelimiter + 1).split("&");
-        for (int i = 0; i < parameters.length; i++) {
-            // process parameters in reverse-order, last specified pragma value wins
-            String parameter = parameters[parameters.length - 1 - i].trim();
+        for (String rawParameter : parameters) {
+            String parameter = rawParameter.trim();
 
             if (parameter.isEmpty()) {
                 // duplicated &&& sequence, drop
                 continue;
             }
 
-            String[] kvp = parameter.split("=");
+            String[] kvp = parameter.split("=", 2);
             String key = kvp[0].trim().toLowerCase(Locale.ROOT);
-            if (SQLiteConfig.pragmaSet.contains(key)) {
-                if (kvp.length == 1) {
+            if (SQLiteConfig.isPragma(key)) {
+                String value = kvp.length == 1 ? "" : kvp[1].trim();
+                if (value.isEmpty()) {
                     throw new SQLException(
                             String.format(
                                     "Please specify a value for PRAGMA %s in URL %s", key, url));
                 }
-                String value = kvp[1].trim();
-                if (!value.isEmpty()) {
-                    if (prop.containsKey(key)) {
-                        //
-                        // IGNORE
-                        //
-                        // this allows DriverManager.getConnection(String, Properties)
-                        // to override URL parameters programmatically.
-                        //
-                        // It also ignores duplicate pragma keys in the URL. The reversed
-                        // processing order ensures the last-supplied pragma value is used.
-                    } else {
-                        prop.setProperty(key, value);
-                    }
-                }
+                if (!propertyNames.contains(key)) prop.setProperty(key, value);
             } else {
                 // not a Pragma, retain as part of filename
                 sb.append(nonPragmaCount == 0 ? '?' : '&');
@@ -544,8 +520,7 @@ public final class SQLiteConnection implements Connection {
             }
         }
 
-        final String newFilename = sb.toString();
-        return newFilename;
+        return sb.toString();
     }
 
     protected String transactionPrefix() {
@@ -670,7 +645,7 @@ public final class SQLiteConnection implements Connection {
         SQLiteConfig config = db.getConfig();
         return (
         // the entire database is read-only
-        ((config.getOpenModeFlags() & SQLiteOpenMode.READONLY.flag) != 0)
+        ((config.getOpenModeFlags() & SQLiteOpenMode.READONLY.flag()) != 0)
                 // the flag was set explicitly by the user on this connection
                 || (config.isExplicitReadOnly() && this.readOnly));
     }

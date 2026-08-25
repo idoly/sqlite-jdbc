@@ -5,11 +5,12 @@ import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * SQLite Configuration
@@ -19,6 +20,8 @@ import java.util.TreeSet;
  * @author leo
  */
 public final class SQLiteConfig {
+    private static final String[] ON_OFF_CHOICES = {"true", "false"};
+
     /* Date storage class*/
     public static final String DEFAULT_DATE_STRING_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
     /* Default limits used by SQLite: https://www.sqlite.org/limits.html */
@@ -50,7 +53,7 @@ public final class SQLiteConfig {
     public SQLiteConfig(Properties prop) {
         this.pragmaTable = prop;
 
-        String openMode = pragmaTable.getProperty(Pragma.OPEN_MODE.pragmaName);
+        String openMode = pragmaTable.getProperty(Pragma.OPEN_MODE.pragmaName());
         if (openMode != null) {
             openModeFlag = Integer.parseInt(openMode);
         } else {
@@ -61,16 +64,18 @@ public final class SQLiteConfig {
         // Shared Cache
         setSharedCache(
                 Boolean.parseBoolean(
-                        pragmaTable.getProperty(Pragma.SHARED_CACHE.pragmaName, "false")));
+                        pragmaTable.getProperty(Pragma.SHARED_CACHE.pragmaName(), "false")));
         // Enable URI filenames
         setOpenMode(SQLiteOpenMode.OPEN_URI);
 
         setBusyTimeout(
-                Integer.parseInt(pragmaTable.getProperty(Pragma.BUSY_TIMEOUT.pragmaName, "3000")));
+                Integer.parseInt(
+                        pragmaTable.getProperty(Pragma.BUSY_TIMEOUT.pragmaName(), "3000")));
         this.defaultConnectionConfig = SQLiteConnectionConfig.fromPragmaTable(pragmaTable);
         this.explicitReadOnly =
                 Boolean.parseBoolean(
-                        pragmaTable.getProperty(Pragma.JDBC_EXPLICIT_READONLY.pragmaName, "false"));
+                        pragmaTable.getProperty(
+                                Pragma.JDBC_EXPLICIT_READONLY.pragmaName(), "false"));
     }
 
     public SQLiteConnectionConfig newConnectionConfig() {
@@ -95,7 +100,7 @@ public final class SQLiteConfig {
 
         HashSet<String> pragmaParams = new HashSet<>();
         for (Pragma each : Pragma.values()) {
-            pragmaParams.add(each.pragmaName);
+            pragmaParams.add(each.pragmaName());
         }
 
         if (conn instanceof SQLiteConnection sqliteConn) {
@@ -139,38 +144,38 @@ public final class SQLiteConfig {
                     parseLimitPragma(Pragma.LIMIT_PAGE_COUNT, DEFAULT_MAX_PAGE_COUNT));
         }
 
-        pragmaParams.remove(Pragma.OPEN_MODE.pragmaName);
-        pragmaParams.remove(Pragma.SHARED_CACHE.pragmaName);
-        pragmaParams.remove(Pragma.LOAD_EXTENSION.pragmaName);
-        pragmaParams.remove(Pragma.DATE_PRECISION.pragmaName);
-        pragmaParams.remove(Pragma.DATE_CLASS.pragmaName);
-        pragmaParams.remove(Pragma.DATE_STRING_FORMAT.pragmaName);
-        pragmaParams.remove(Pragma.PASSWORD.pragmaName);
-        pragmaParams.remove(Pragma.HEXKEY_MODE.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_ATTACHED.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_COLUMN.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_COMPOUND_SELECT.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_EXPR_DEPTH.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_FUNCTION_ARG.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_LENGTH.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_LIKE_PATTERN_LENGTH.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_SQL_LENGTH.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_TRIGGER_DEPTH.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_VARIABLE_NUMBER.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_VDBE_OP.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_WORKER_THREADS.pragmaName);
-        pragmaParams.remove(Pragma.LIMIT_PAGE_COUNT.pragmaName);
+        pragmaParams.remove(Pragma.OPEN_MODE.pragmaName());
+        pragmaParams.remove(Pragma.SHARED_CACHE.pragmaName());
+        pragmaParams.remove(Pragma.LOAD_EXTENSION.pragmaName());
+        pragmaParams.remove(Pragma.DATE_PRECISION.pragmaName());
+        pragmaParams.remove(Pragma.DATE_CLASS.pragmaName());
+        pragmaParams.remove(Pragma.DATE_STRING_FORMAT.pragmaName());
+        pragmaParams.remove(Pragma.PASSWORD.pragmaName());
+        pragmaParams.remove(Pragma.HEXKEY_MODE.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_ATTACHED.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_COLUMN.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_COMPOUND_SELECT.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_EXPR_DEPTH.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_FUNCTION_ARG.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_LENGTH.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_LIKE_PATTERN_LENGTH.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_SQL_LENGTH.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_TRIGGER_DEPTH.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_VARIABLE_NUMBER.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_VDBE_OP.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_WORKER_THREADS.pragmaName());
+        pragmaParams.remove(Pragma.LIMIT_PAGE_COUNT.pragmaName());
 
         // exclude this "fake" pragma from execution
-        pragmaParams.remove(Pragma.JDBC_EXPLICIT_READONLY.pragmaName);
-        pragmaParams.remove(Pragma.JDBC_GET_GENERATED_KEYS.pragmaName);
+        pragmaParams.remove(Pragma.JDBC_EXPLICIT_READONLY.pragmaName());
+        pragmaParams.remove(Pragma.JDBC_GET_GENERATED_KEYS.pragmaName());
 
         Statement stat = conn.createStatement();
         try {
-            if (pragmaTable.containsKey(Pragma.PASSWORD.pragmaName)) {
-                String password = pragmaTable.getProperty(Pragma.PASSWORD.pragmaName);
+            if (pragmaTable.containsKey(Pragma.PASSWORD.pragmaName())) {
+                String password = pragmaTable.getProperty(Pragma.PASSWORD.pragmaName());
                 if (password != null && !password.isEmpty()) {
-                    String hexkeyMode = pragmaTable.getProperty(Pragma.HEXKEY_MODE.pragmaName);
+                    String hexkeyMode = pragmaTable.getProperty(Pragma.HEXKEY_MODE.pragmaName());
                     String passwordPragma;
                     if (HexKeyMode.SSE.name().equalsIgnoreCase(hexkeyMode)) {
                         passwordPragma = "pragma hexkey = '%s'";
@@ -230,7 +235,7 @@ public final class SQLiteConfig {
      * @return True if the given value is the default value; false otherwise.
      */
     private boolean getBoolean(Pragma pragma, String defaultValue) {
-        return Boolean.parseBoolean(pragmaTable.getProperty(pragma.pragmaName, defaultValue));
+        return Boolean.parseBoolean(pragmaTable.getProperty(pragma.pragmaName(), defaultValue));
     }
 
     /**
@@ -241,10 +246,10 @@ public final class SQLiteConfig {
      * @return The value of the pragma or defaultValue.
      */
     private int parseLimitPragma(Pragma pragma, int defaultValue) {
-        if (!pragmaTable.containsKey(pragma.pragmaName)) {
+        if (!pragmaTable.containsKey(pragma.pragmaName())) {
             return defaultValue;
         }
-        String valueString = pragmaTable.getProperty(pragma.pragmaName);
+        String valueString = pragmaTable.getProperty(pragma.pragmaName());
         try {
             return Integer.parseInt(valueString);
         } catch (NumberFormatException ex) {
@@ -284,7 +289,7 @@ public final class SQLiteConfig {
      * @param value The value to set it to.
      */
     public void setPragma(Pragma pragma, String value) {
-        pragmaTable.put(pragma.pragmaName, value);
+        pragmaTable.put(pragma.pragmaName(), value);
     }
 
     /**
@@ -294,22 +299,23 @@ public final class SQLiteConfig {
      * @return The property object.
      */
     public Properties toProperties() {
-        pragmaTable.setProperty(Pragma.OPEN_MODE.pragmaName, Integer.toString(openModeFlag));
+        pragmaTable.setProperty(Pragma.OPEN_MODE.pragmaName(), Integer.toString(openModeFlag));
         pragmaTable.setProperty(
-                Pragma.TRANSACTION_MODE.pragmaName,
+                Pragma.TRANSACTION_MODE.pragmaName(),
                 defaultConnectionConfig.getTransactionMode().getValue());
         pragmaTable.setProperty(
-                Pragma.DATE_CLASS.pragmaName, defaultConnectionConfig.getDateClass().getValue());
+                Pragma.DATE_CLASS.pragmaName(), defaultConnectionConfig.getDateClass().getValue());
         pragmaTable.setProperty(
-                Pragma.DATE_PRECISION.pragmaName,
+                Pragma.DATE_PRECISION.pragmaName(),
                 defaultConnectionConfig.getDatePrecision().getValue());
         pragmaTable.setProperty(
-                Pragma.DATE_STRING_FORMAT.pragmaName,
+                Pragma.DATE_STRING_FORMAT.pragmaName(),
                 defaultConnectionConfig.getDateStringFormat());
         pragmaTable.setProperty(
-                Pragma.JDBC_EXPLICIT_READONLY.pragmaName, this.explicitReadOnly ? "true" : "false");
+                Pragma.JDBC_EXPLICIT_READONLY.pragmaName(),
+                this.explicitReadOnly ? "true" : "false");
         pragmaTable.setProperty(
-                Pragma.JDBC_GET_GENERATED_KEYS.pragmaName,
+                Pragma.JDBC_GET_GENERATED_KEYS.pragmaName(),
                 defaultConnectionConfig.isGetGeneratedKeys() ? "true" : "false");
         return pragmaTable;
     }
@@ -322,9 +328,9 @@ public final class SQLiteConfig {
         DriverPropertyInfo[] result = new DriverPropertyInfo[pragma.length];
         int index = 0;
         for (Pragma p : Pragma.values()) {
-            DriverPropertyInfo di = new DriverPropertyInfo(p.pragmaName, null);
-            di.choices = p.choices;
-            di.description = p.description;
+            DriverPropertyInfo di = new DriverPropertyInfo(p.pragmaName(), null);
+            di.choices = p.choices();
+            di.description = p.description();
             di.required = false;
             result[index++] = di;
         }
@@ -332,16 +338,13 @@ public final class SQLiteConfig {
         return result;
     }
 
-    static class OnOff {
-        private static final String[] Values = new String[] {"true", "false"};
-    }
+    private static final Set<String> PRAGMA_NAMES =
+            Arrays.stream(Pragma.values())
+                    .map(Pragma::pragmaName)
+                    .collect(Collectors.toUnmodifiableSet());
 
-    static final Set<String> pragmaSet = new TreeSet<>();
-
-    static {
-        for (SQLiteConfig.Pragma pragma : SQLiteConfig.Pragma.values()) {
-            pragmaSet.add(pragma.pragmaName);
-        }
+    static boolean isPragma(String name) {
+        return PRAGMA_NAMES.contains(name);
     }
 
     /**
@@ -367,11 +370,11 @@ public final class SQLiteConfig {
         SHARED_CACHE(
                 "shared_cache",
                 "Enable SQLite Shared-Cache mode, native driver only",
-                OnOff.Values),
+                ON_OFF_CHOICES),
         LOAD_EXTENSION(
                 "enable_load_extension",
                 "Enable SQLite load_extension() function, native driver only",
-                OnOff.Values),
+                ON_OFF_CHOICES),
 
         // Pragmas that can be set after opening the database
         CACHE_SIZE(
@@ -385,21 +388,21 @@ public final class SQLiteConfig {
         CASE_SENSITIVE_LIKE(
                 "case_sensitive_like",
                 "Installs a new application-defined LIKE function that is either case sensitive or insensitive depending on the value",
-                OnOff.Values),
+                ON_OFF_CHOICES),
         DEFER_FOREIGN_KEYS(
                 "defer_foreign_keys",
                 "When the defer_foreign_keys PRAGMA is on, enforcement of all foreign key constraints is delayed until the outermost transaction is committed. The defer_foreign_keys pragma defaults to OFF so that foreign key constraints are only deferred if they are created as \"DEFERRABLE INITIALLY DEFERRED\". The defer_foreign_keys pragma is automatically switched off at each COMMIT or ROLLBACK. Hence, the defer_foreign_keys pragma must be separately enabled for each transaction. This pragma is only meaningful if foreign key constraints are enabled, of course.",
-                OnOff.Values),
+                ON_OFF_CHOICES),
         ENCODING(
                 "encoding",
                 "Set the encoding that the main database will be created with if it is created by this session",
                 toStringArray(Encoding.values())),
         FOREIGN_KEYS(
-                "foreign_keys", "Set the enforcement of foreign key constraints", OnOff.Values),
+                "foreign_keys", "Set the enforcement of foreign key constraints", ON_OFF_CHOICES),
         FULL_SYNC(
                 "fullsync",
                 "Whether or not the F_FULLFSYNC syncing method is used on systems that support it. Only Mac OS X supports F_FULLFSYNC.",
-                OnOff.Values),
+                ON_OFF_CHOICES),
         INCREMENTAL_VACUUM(
                 "incremental_vacuum",
                 "Causes up to N pages to be removed from the freelist. The database file is truncated by the same amount. The incremental_vacuum pragma has no effect if the database is not in auto_vacuum=incremental mode or if there are no pages on the freelist. If there are fewer than N pages on the freelist, or if N is less than 1, or if the \"(N)\" argument is omitted, then the entire freelist is cleared.",
@@ -422,13 +425,13 @@ public final class SQLiteConfig {
                 null),
         MAX_PAGE_COUNT(
                 "max_page_count", "Set the maximum number of pages in the database file", null),
-        READ_UNCOMMITTED("read_uncommitted", "Set READ UNCOMMITTED isolation", OnOff.Values),
+        READ_UNCOMMITTED("read_uncommitted", "Set READ UNCOMMITTED isolation", ON_OFF_CHOICES),
         RECURSIVE_TRIGGERS(
-                "recursive_triggers", "Set the recursive trigger capability", OnOff.Values),
+                "recursive_triggers", "Set the recursive trigger capability", ON_OFF_CHOICES),
         REVERSE_UNORDERED_SELECTS(
                 "reverse_unordered_selects",
                 "When enabled, this PRAGMA causes many SELECT statements without an ORDER BY clause to emit their results in the reverse order from what they normally would",
-                OnOff.Values),
+                ON_OFF_CHOICES),
         SECURE_DELETE(
                 "secure_delete",
                 "When secure_delete is on, SQLite overwrites deleted content with zeros",
@@ -525,11 +528,11 @@ public final class SQLiteConfig {
         JDBC_EXPLICIT_READONLY(
                 "jdbc.explicit_readonly", "Set explicit read only transactions", null),
         JDBC_GET_GENERATED_KEYS(
-                "jdbc.get_generated_keys", "Enable retrieval of generated keys", OnOff.Values);
+                "jdbc.get_generated_keys", "Enable retrieval of generated keys", ON_OFF_CHOICES);
 
-        public final String pragmaName;
-        public final String[] choices;
-        public final String description;
+        private final String pragmaName;
+        private final String[] choices;
+        private final String description;
 
         Pragma(String pragmaName) {
             this(pragmaName, null);
@@ -542,7 +545,7 @@ public final class SQLiteConfig {
         Pragma(String pragmaName, String description, String[] choices) {
             this.pragmaName = pragmaName;
             this.description = description;
-            this.choices = choices;
+            this.choices = choices == null ? null : choices.clone();
         }
 
         /**
@@ -559,8 +562,16 @@ public final class SQLiteConfig {
             return result;
         }
 
-        public final String getPragmaName() {
+        public String pragmaName() {
             return pragmaName;
+        }
+
+        public String[] choices() {
+            return choices == null ? null : choices.clone();
+        }
+
+        public String description() {
+            return description;
         }
     }
 
@@ -572,7 +583,7 @@ public final class SQLiteConfig {
      *     href="https://www.sqlite.org/c3ref/c_open_autoproxy.html">https://www.sqlite.org/c3ref/c_open_autoproxy.html</a>
      */
     public void setOpenMode(SQLiteOpenMode mode) {
-        openModeFlag |= mode.flag;
+        openModeFlag |= mode.flag();
     }
 
     /**
@@ -583,7 +594,7 @@ public final class SQLiteConfig {
      *     href="https://www.sqlite.org/c3ref/c_open_autoproxy.html">https://www.sqlite.org/c3ref/c_open_autoproxy.html</a>
      */
     public void resetOpenMode(SQLiteOpenMode mode) {
-        openModeFlag &= ~mode.flag;
+        openModeFlag &= ~mode.flag();
     }
 
     /**
@@ -679,7 +690,7 @@ public final class SQLiteConfig {
         UTF_16LE(UTF16_LITTLE_ENDIAN), // UTF-16le
         UTF_16BE(UTF16_BIG_ENDIAN); // UTF-16be
 
-        public final String typeName;
+        private final String typeName;
 
         Encoding(String typeName) {
             this.typeName = typeName;
@@ -719,7 +730,7 @@ public final class SQLiteConfig {
      *     href="https://www.sqlite.org/pragma.html#pragma_encoding">www.sqlite.org/pragma.html#pragma_encoding</a>
      */
     public void setEncoding(Encoding encoding) {
-        setPragma(Pragma.ENCODING, encoding.typeName);
+        setPragma(Pragma.ENCODING, encoding.getValue());
     }
 
     /**

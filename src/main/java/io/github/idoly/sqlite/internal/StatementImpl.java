@@ -221,7 +221,7 @@ public class StatementImpl implements Statement {
                         return false;
                     }
 
-                    StatementImpl.this.sql = sql;
+                    this.sql = sql;
                     synchronized (conn) {
                         prepareStatement();
                         boolean result = exec();
@@ -352,7 +352,6 @@ public class StatementImpl implements Statement {
      * @see java.sql.Statement#getLargeUpdateCount()
      */
     public long getLargeUpdateCount() throws SQLException {
-        SQLiteDatabase db = database;
         if (!pointer.isClosed()
                 && !rs.isOpen()
                 && !resultsWaiting

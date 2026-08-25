@@ -6,7 +6,7 @@ public class SQLiteException extends SQLException {
     private SQLiteErrorCode resultCode;
 
     public SQLiteException(String message, SQLiteErrorCode resultCode) {
-        super(message, null, resultCode.code & 0xff);
+        super(message, null, resultCode.code() & 0xff);
         this.resultCode = resultCode;
     }
 

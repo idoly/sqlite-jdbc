@@ -46,22 +46,15 @@ public class QueryTest {
 
     @Test
     public void createTable() throws Exception {
-        Connection conn = getConnection();
-        Statement stmt = conn.createStatement();
-        stmt.execute(
-                "CREATE TABLE IF NOT EXISTS sample "
-                        + "(id INTEGER PRIMARY KEY, descr VARCHAR(40))");
-        stmt.close();
-
-        stmt = conn.createStatement();
-        try {
-            ResultSet rs = stmt.executeQuery("SELECT * FROM sample");
-            rs.next();
-        } catch (SQLException e) {
-            e.printStackTrace();
+        try (Connection connection = getConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(
+                    "CREATE TABLE IF NOT EXISTS sample "
+                            + "(id INTEGER PRIMARY KEY, descr VARCHAR(40))");
+            try (ResultSet result = statement.executeQuery("SELECT * FROM sample")) {
+                assertThat(result.next()).isFalse();
+            }
         }
-
-        conn.close();
     }
 
     @Test
@@ -129,7 +122,7 @@ public class QueryTest {
     @Test
     public void dateTimeWithTimeZoneTest() throws Exception {
         Properties properties = new Properties();
-        properties.setProperty(SQLiteConfig.Pragma.DATE_CLASS.pragmaName, "text");
+        properties.setProperty(SQLiteConfig.Pragma.DATE_CLASS.pragmaName(), "text");
         Connection conn = DriverManager.getConnection("jdbc:sqlite:", properties);
 
         try (Statement statement = conn.createStatement()) {

@@ -27,9 +27,13 @@ public enum SQLiteOpenMode {
     SHAREDCACHE(0x00020000), /* Ok for int SQLITE3_open_v2() */
     PRIVATECACHE(0x00040000) /* Ok for sqlite3_open_v2() */;
 
-    public final int flag;
+    private final int flag;
 
-    private SQLiteOpenMode(int flag) {
+    SQLiteOpenMode(int flag) {
         this.flag = flag;
+    }
+
+    public int flag() {
+        return flag;
     }
 }

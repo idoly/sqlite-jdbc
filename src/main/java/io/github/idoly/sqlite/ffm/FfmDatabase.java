@@ -46,8 +46,8 @@ public final class FfmDatabase extends SQLiteDatabase {
     }
 
     /** Initializes the FFM symbol table. */
-    public static boolean load() {
-        return SQLiteFfmBindings.initialize();
+    public static void load() {
+        SQLiteFfmBindings.initialize();
     }
 
     @Override
@@ -57,26 +57,28 @@ public final class FfmDatabase extends SQLiteDatabase {
 
     @Override
     protected synchronized void _close() throws SQLException {
-        if (pointer == 0) return;
-        SQLiteFfmBindings.setBusyHandler(pointer, MemorySegment.NULL);
-        SQLiteFfmBindings.setProgressHandler(pointer, 0, MemorySegment.NULL);
-        SQLiteFfmBindings.setUpdateHook(pointer, MemorySegment.NULL);
-        SQLiteFfmBindings.setTransactionHooks(pointer, MemorySegment.NULL, MemorySegment.NULL);
-        int result = SQLiteFfmBindings.close(pointer);
-        if (result != SQLITE_OK)
-            throw newSQLException(result, SQLiteFfmBindings.errorMessage(pointer));
-        pointer = 0;
-        busyHandler = null;
-        busyHandlerStub = MemorySegment.NULL;
-        progressHandler = null;
-        progressHandlerStub = MemorySegment.NULL;
-        updateHookStub = MemorySegment.NULL;
-        commitHookStub = MemorySegment.NULL;
-        rollbackHookStub = MemorySegment.NULL;
-        collations.clear();
-        collationStubs.clear();
-        functions.clear();
-        callbackArena.close();
+        if (pointer != 0) {
+            SQLiteFfmBindings.setBusyHandler(pointer, MemorySegment.NULL);
+            SQLiteFfmBindings.setProgressHandler(pointer, 0, MemorySegment.NULL);
+            SQLiteFfmBindings.setUpdateHook(pointer, MemorySegment.NULL);
+            SQLiteFfmBindings.setTransactionHooks(pointer, MemorySegment.NULL, MemorySegment.NULL);
+            int result = SQLiteFfmBindings.close(pointer);
+            if (result != SQLITE_OK) {
+                throw newSQLException(result, SQLiteFfmBindings.errorMessage(pointer));
+            }
+            pointer = 0;
+            busyHandler = null;
+            busyHandlerStub = MemorySegment.NULL;
+            progressHandler = null;
+            progressHandlerStub = MemorySegment.NULL;
+            updateHookStub = MemorySegment.NULL;
+            commitHookStub = MemorySegment.NULL;
+            rollbackHookStub = MemorySegment.NULL;
+            collations.clear();
+            collationStubs.clear();
+            functions.clear();
+        }
+        if (callbackArena.scope().isAlive()) callbackArena.close();
     }
 
     @Override

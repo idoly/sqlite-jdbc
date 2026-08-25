@@ -92,7 +92,7 @@ final class BackupRestoreCommand {
         public void execute(SQLiteDatabase db) throws SQLException {
             int rc = db.backup(srcDB, destFile, null);
 
-            if (rc != SQLiteErrorCode.SQLITE_OK.code) {
+            if (rc != SQLiteErrorCode.SQLITE_OK.code()) {
                 throw SQLiteDatabase.newSQLException(rc, "Backup failed");
             }
         }
@@ -143,7 +143,7 @@ final class BackupRestoreCommand {
         public void execute(SQLiteDatabase db) throws SQLException {
             int rc = db.restore(targetDB, srcFile, null);
 
-            if (rc != SQLiteErrorCode.SQLITE_OK.code) {
+            if (rc != SQLiteErrorCode.SQLITE_OK.code()) {
                 throw SQLiteDatabase.newSQLException(rc, "Restore failed");
             }
         }

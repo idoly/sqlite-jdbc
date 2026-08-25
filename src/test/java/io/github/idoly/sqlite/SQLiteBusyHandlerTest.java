@@ -55,6 +55,7 @@ public class SQLiteBusyHandlerTest {
         private final Statement stat;
         private final CountDownLatch lockedLatch = new CountDownLatch(1);
         private final CountDownLatch completeLatch = new CountDownLatch(1);
+        private volatile Throwable failure;
 
         public BusyWork(int threadNum) throws Exception {
             busyWorkConn = createConnection(threadNum);
@@ -80,21 +81,24 @@ public class SQLiteBusyHandlerTest {
         @Override
         public void run() {
             try {
-                // Generate some work for the sqlite vm
                 stat.executeUpdate("drop table if exists foo;");
                 stat.executeUpdate("create table foo (id integer);");
                 stat.execute("insert into foo (id) values (wait_for_latch());");
-            } catch (SQLException ex) {
-                System.out.println("HERE" + ex);
-                throw new RuntimeException(ex);
+            } catch (Throwable error) {
+                failure = error;
             } finally {
                 try {
                     busyWorkConn.close();
-                } catch (Exception ex) {
-                    System.out.println("Exception closing: " + ex);
-                    ex.printStackTrace();
+                } catch (Throwable closeError) {
+                    if (failure == null) failure = closeError;
+                    else failure.addSuppressed(closeError);
                 }
             }
+        }
+
+        private void awaitSuccess() throws InterruptedException {
+            join();
+            assertThat(failure).isNull();
         }
     }
 
@@ -147,11 +151,11 @@ public class SQLiteBusyHandlerTest {
                 Throwable thrown = catchThrowable(() -> doWork(localStat));
                 assertThat(thrown).isInstanceOf(SQLiteException.class);
                 assertThat(((SQLiteException) thrown).getErrorCode())
-                        .isEqualTo(SQLiteErrorCode.SQLITE_BUSY.code);
+                        .isEqualTo(SQLiteErrorCode.SQLITE_BUSY.code());
             }
 
             busyWork.completeLatch.countDown();
-            busyWork.join();
+            busyWork.awaitSuccess();
             assertThat(calls[0]).isEqualTo(3);
         }
     }
@@ -188,9 +192,9 @@ public class SQLiteBusyHandlerTest {
         Throwable thrown = catchThrowable(() -> doWork(stat));
         assertThat(thrown).isInstanceOf(SQLiteException.class);
         assertThat(((SQLiteException) thrown).getErrorCode())
-                .isEqualTo(SQLiteErrorCode.SQLITE_BUSY.code);
+                .isEqualTo(SQLiteErrorCode.SQLITE_BUSY.code());
         busyWork.completeLatch.countDown();
-        busyWork.join();
+        busyWork.awaitSuccess();
         assertThat(calls[0]).isEqualTo(3);
 
         int totalCalls = calls[0];
@@ -202,10 +206,10 @@ public class SQLiteBusyHandlerTest {
         thrown = catchThrowable(() -> doWork(stat));
         assertThat(thrown).isInstanceOf(SQLiteException.class);
         assertThat(((SQLiteException) thrown).getErrorCode())
-                .isEqualTo(SQLiteErrorCode.SQLITE_BUSY.code);
+                .isEqualTo(SQLiteErrorCode.SQLITE_BUSY.code());
 
         busyWork.completeLatch.countDown();
-        busyWork.join();
+        busyWork.awaitSuccess();
         assertThat(calls[0]).isEqualTo(totalCalls);
     }
 

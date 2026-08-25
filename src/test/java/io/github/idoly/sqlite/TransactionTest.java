@@ -9,6 +9,7 @@ import java.sql.*;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,8 +23,6 @@ import org.junit.jupiter.api.io.TempDir;
 public class TransactionTest {
     private Connection conn1, conn2, conn3;
     private Statement stat1, stat2, stat3;
-
-    boolean done = false;
 
     @BeforeEach
     public void connect(@TempDir File tempDir) throws Exception {
@@ -255,35 +254,25 @@ public class TransactionTest {
         ResultSet rs = stat1.executeQuery("select * from t;");
         assertThat(rs.next()).isTrue();
 
-        final TransactionTest lock = this;
-        lock.done = false;
-        new Thread(
+        AtomicReference<SQLException> failure = new AtomicReference<>();
+        Thread worker =
+                new Thread(
                         () -> {
                             try {
                                 stat2.executeUpdate("insert into t values (3);");
-                            } catch (SQLException e) {
-                                e.printStackTrace();
-                                return;
+                            } catch (SQLException error) {
+                                failure.set(error);
                             }
-
-                            synchronized (lock) {
-                                lock.done = true;
-                                lock.notify();
-                            }
-                        })
-                .start();
+                        });
+        worker.setDaemon(true);
+        worker.start();
 
         Thread.sleep(100);
         rs.close();
+        worker.join(5000);
 
-        synchronized (lock) {
-            if (!lock.done) {
-                lock.wait(5000);
-                if (!lock.done) {
-                    throw new Exception("should be done");
-                }
-            }
-        }
+        assertThat(worker.isAlive()).isFalse();
+        assertThat((Throwable) failure.get()).isNull();
     }
 
     @Test

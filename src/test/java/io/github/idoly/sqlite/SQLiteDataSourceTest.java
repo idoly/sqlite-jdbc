@@ -8,17 +8,9 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class SQLiteDataSourceTest {
-
-    @BeforeEach
-    public void setUp() {}
-
-    @AfterEach
-    public void tearDown() {}
 
     @Test
     public void wrapperContract() throws SQLException {
@@ -28,6 +20,10 @@ public class SQLiteDataSourceTest {
         assertThatThrownBy(() -> dataSource.unwrap(String.class)).isInstanceOf(SQLException.class);
         assertThatThrownBy(() -> dataSource.isWrapperFor(null)).isInstanceOf(SQLException.class);
         assertThatThrownBy(() -> dataSource.setLoginTimeout(-1)).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> new SQLiteDataSource(null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> dataSource.setConfig(null))
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -91,7 +87,7 @@ public class SQLiteDataSourceTest {
         assertThat(
                         ds.getConfig()
                                 .toProperties()
-                                .getProperty(SQLiteConfig.Pragma.BUSY_TIMEOUT.pragmaName))
+                                .getProperty(SQLiteConfig.Pragma.BUSY_TIMEOUT.pragmaName()))
                 .isEqualTo("1234");
         assertThat(ds.getConfig().getBusyTimeout()).isEqualTo(1234);
     }
@@ -104,7 +100,7 @@ public class SQLiteDataSourceTest {
                         ds.getConfig()
                                 .toProperties()
                                 .getProperty(
-                                        SQLiteConfig.Pragma.JDBC_GET_GENERATED_KEYS.pragmaName))
+                                        SQLiteConfig.Pragma.JDBC_GET_GENERATED_KEYS.pragmaName()))
                 .isEqualTo("false");
         assertThat(ds.getConfig().isGetGeneratedKeys()).isEqualTo(false);
         assertThat(
@@ -118,7 +114,7 @@ public class SQLiteDataSourceTest {
                         ds.getConfig()
                                 .toProperties()
                                 .getProperty(
-                                        SQLiteConfig.Pragma.JDBC_GET_GENERATED_KEYS.pragmaName))
+                                        SQLiteConfig.Pragma.JDBC_GET_GENERATED_KEYS.pragmaName()))
                 .isEqualTo("true");
         assertThat(ds.getConfig().isGetGeneratedKeys()).isEqualTo(true);
         assertThat(

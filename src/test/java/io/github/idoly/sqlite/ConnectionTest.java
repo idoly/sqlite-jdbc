@@ -271,6 +271,22 @@ public class ConnectionTest {
     }
 
     @Test
+    public void openResourceWithoutContextClassLoader() throws Exception {
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        thread.setContextClassLoader(null);
+        try (Connection connection =
+                        DriverManager.getConnection(
+                                "jdbc:sqlite::resource:io/github/idoly/sqlite/sample.db");
+                Statement statement = connection.createStatement();
+                ResultSet result = statement.executeQuery("select * from coordinate")) {
+            assertThat(result.next()).isTrue();
+        } finally {
+            thread.setContextClassLoader(previous);
+        }
+    }
+
+    @Test
     public void openJARResource() throws Exception {
         File testJAR = copyToTemp("testdb.jar");
         assertThat(testJAR.exists()).isTrue();
@@ -474,6 +490,19 @@ public class ConnectionTest {
     }
 
     @Test
+    public void preservesUriParameterOrderAndEqualsInValues() throws SQLException {
+        Properties properties = new Properties();
+        String filename =
+                SQLiteConnection.extractPragmasFromFilename(
+                        "jdbc:sqlite:file:test?mode=memory&token=a=b&date_string_format=x=y",
+                        "file:test?mode=memory&token=a=b&date_string_format=x=y",
+                        properties);
+
+        assertThat(filename).isEqualTo("file:test?mode=memory&token=a=b");
+        assertThat(properties.getProperty(Pragma.DATE_STRING_FORMAT.pragmaName())).isEqualTo("x=y");
+    }
+
+    @Test
     public void useLastSpecifiedPragmaValueInURI() throws Exception {
         File testDB = copyToTemp("sample.db");
 
@@ -499,7 +528,7 @@ public class ConnectionTest {
 
         assertThat(testDB.exists()).isTrue();
         Properties props = new Properties();
-        props.setProperty(Pragma.JOURNAL_MODE.pragmaName, JournalMode.TRUNCATE.name());
+        props.setProperty(Pragma.JOURNAL_MODE.pragmaName(), JournalMode.TRUNCATE.name());
         Connection conn =
                 DriverManager.getConnection(
                         String.format("jdbc:sqlite:%s?journal_mode=WAL", testDB), props);

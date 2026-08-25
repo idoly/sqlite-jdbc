@@ -752,7 +752,7 @@ public class PreparedStatementTest {
                             SQLiteException.class,
                             (e) -> {
                                 assertThat(e.getErrorCode())
-                                        .isEqualTo(SQLiteErrorCode.SQLITE_CONSTRAINT.code);
+                                        .isEqualTo(SQLiteErrorCode.SQLITE_CONSTRAINT.code());
                                 assertThat(e.getResultCode())
                                         .isEqualTo(SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE);
                             });
@@ -774,7 +774,7 @@ public class PreparedStatementTest {
                             SQLiteException.class,
                             (e) -> {
                                 assertThat(e.getErrorCode())
-                                        .isEqualTo(SQLiteErrorCode.SQLITE_CONSTRAINT.code);
+                                        .isEqualTo(SQLiteErrorCode.SQLITE_CONSTRAINT.code());
                                 assertThat(e.getResultCode())
                                         .isEqualTo(SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE);
                             });

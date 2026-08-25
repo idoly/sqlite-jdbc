@@ -29,11 +29,14 @@ public final class SQLitePooledConnection implements PooledConnection {
 
     private SQLiteConnection physicalConnection;
     private LogicalConnection logicalConnection;
+    private boolean unusable;
     private final int defaultTransactionIsolation;
+    private final boolean defaultReadOnly;
 
     SQLitePooledConnection(SQLiteConnection physicalConnection) {
         this.physicalConnection = physicalConnection;
         defaultTransactionIsolation = physicalConnection.getTransactionIsolation();
+        defaultReadOnly = physicalConnection.isReadOnly();
     }
 
     @Override
@@ -67,6 +70,7 @@ public final class SQLitePooledConnection implements PooledConnection {
             failure = append(failure, error);
         } finally {
             physicalConnection = null;
+            unusable = true;
             connectionListeners.clear();
             statementListeners.clear();
         }
@@ -94,7 +98,7 @@ public final class SQLitePooledConnection implements PooledConnection {
     }
 
     private SQLiteConnection requirePhysicalConnection() throws SQLException {
-        if (physicalConnection == null || physicalConnection.isClosed()) {
+        if (unusable || physicalConnection == null || physicalConnection.isClosed()) {
             throw new SQLException("Pooled connection is closed");
         }
         return physicalConnection;
@@ -164,6 +168,7 @@ public final class SQLitePooledConnection implements PooledConnection {
                     throw error.getCause();
                 }
                 synchronized (SQLitePooledConnection.this) {
+                    unusable = true;
                     detach(this);
                 }
                 if (errorReported.compareAndSet(false, true)) {
@@ -203,10 +208,14 @@ public final class SQLitePooledConnection implements PooledConnection {
                         if (physical.getTransactionIsolation() != defaultTransactionIsolation) {
                             physical.setTransactionIsolation(defaultTransactionIsolation);
                         }
+                        if (physical.isReadOnly() != defaultReadOnly) {
+                            physical.setReadOnly(defaultReadOnly);
+                        }
                     } catch (SQLException error) {
                         failure = append(failure, error);
                     }
                 }
+                if (failure != null) unusable = true;
                 detach(this);
             }
 

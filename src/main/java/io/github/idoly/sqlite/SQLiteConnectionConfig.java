@@ -26,24 +26,24 @@ public final class SQLiteConnectionConfig {
         return new SQLiteConnectionConfig(
                 SQLiteConfig.DateClass.getDateClass(
                         pragmaTable.getProperty(
-                                SQLiteConfig.Pragma.DATE_CLASS.pragmaName,
+                                SQLiteConfig.Pragma.DATE_CLASS.pragmaName(),
                                 SQLiteConfig.DateClass.INTEGER.name())),
                 SQLiteConfig.DatePrecision.getPrecision(
                         pragmaTable.getProperty(
-                                SQLiteConfig.Pragma.DATE_PRECISION.pragmaName,
+                                SQLiteConfig.Pragma.DATE_PRECISION.pragmaName(),
                                 SQLiteConfig.DatePrecision.MILLISECONDS.name())),
                 pragmaTable.getProperty(
-                        SQLiteConfig.Pragma.DATE_STRING_FORMAT.pragmaName,
+                        SQLiteConfig.Pragma.DATE_STRING_FORMAT.pragmaName(),
                         DEFAULT_DATE_STRING_FORMAT),
                 Connection.TRANSACTION_SERIALIZABLE,
                 SQLiteConfig.TransactionMode.getMode(
                         pragmaTable.getProperty(
-                                SQLiteConfig.Pragma.TRANSACTION_MODE.pragmaName,
+                                SQLiteConfig.Pragma.TRANSACTION_MODE.pragmaName(),
                                 SQLiteConfig.TransactionMode.DEFERRED.name())),
                 true,
                 Boolean.parseBoolean(
                         pragmaTable.getProperty(
-                                SQLiteConfig.Pragma.JDBC_GET_GENERATED_KEYS.pragmaName, "true")));
+                                SQLiteConfig.Pragma.JDBC_GET_GENERATED_KEYS.pragmaName(), "true")));
     }
 
     public SQLiteConnectionConfig(

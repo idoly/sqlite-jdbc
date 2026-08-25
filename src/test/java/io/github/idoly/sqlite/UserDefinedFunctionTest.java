@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -557,12 +558,8 @@ public class UserDefinedFunctionTest {
                     int sum = 0;
 
                     @Override
-                    protected void xFunc() {
-                        try {
-                            sum += value_int(1);
-                        } catch (SQLException e) {
-                            e.printStackTrace();
-                        }
+                    protected void xFunc() throws SQLException {
+                        sum += value_int(1);
                     }
 
                     @Override
@@ -576,18 +573,17 @@ public class UserDefinedFunctionTest {
                 "create trigger foo_trigger after insert on foo begin"
                         + " select func(new.rowid, new.col); end;");
         int times = 1000;
+        AtomicReference<SQLException> failure = new AtomicReference<>();
         List<Thread> threads = new LinkedList<>();
         for (int tn = 0; tn < times; tn++) {
             threads.add(
                     new Thread("func thread " + tn) {
                         @Override
                         public void run() {
-                            try {
-                                Statement s = conn.createStatement();
-                                s.executeUpdate("insert into foo values (1);");
-                                s.close();
-                            } catch (SQLException e) {
-                                e.printStackTrace();
+                            try (Statement statement = conn.createStatement()) {
+                                statement.executeUpdate("insert into foo values (1);");
+                            } catch (SQLException error) {
+                                failure.compareAndSet(null, error);
                             }
                         }
                     });
@@ -598,6 +594,7 @@ public class UserDefinedFunctionTest {
         for (Thread thread : threads) {
             thread.join();
         }
+        assertThat((Throwable) failure.get()).isNull();
 
         // check that all of the threads successfully executed
         ResultSet rs = stat.executeQuery("select sum(col) from foo;");
