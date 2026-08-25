@@ -1,20 +1,21 @@
 package io.github.idoly.sqlite.internal;
 
+import io.github.idoly.sqlite.SQLiteConnection;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 
-final class SavepointImpl implements Savepoint {
-    private final BaseConnection connection;
+public final class SavepointImpl implements Savepoint {
+    private final SQLiteConnection connection;
     private final int id;
     private final String name;
 
-    SavepointImpl(BaseConnection connection, int id) {
+    public SavepointImpl(SQLiteConnection connection, int id) {
         this.connection = connection;
         this.id = id;
         name = null;
     }
 
-    SavepointImpl(BaseConnection connection, int id, String name) {
+    public SavepointImpl(SQLiteConnection connection, int id, String name) {
         this.connection = connection;
         this.id = id;
         this.name = name;
@@ -32,11 +33,11 @@ final class SavepointImpl implements Savepoint {
         return name;
     }
 
-    boolean belongsTo(BaseConnection candidate) {
+    public boolean belongsTo(SQLiteConnection candidate) {
         return connection == candidate;
     }
 
-    String sqliteName() {
+    public String sqliteName() {
         return name == null ? "SQLITE_SAVEPOINT_" + id : name;
     }
 }

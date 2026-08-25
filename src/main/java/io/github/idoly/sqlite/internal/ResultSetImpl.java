@@ -1,6 +1,8 @@
 package io.github.idoly.sqlite.internal;
 
-import io.github.idoly.sqlite.core.CoreStatement;
+import io.github.idoly.sqlite.SQLiteConnectionConfig;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
+import io.github.idoly.sqlite.core.SQLiteResultCodes;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -21,24 +23,1042 @@ import java.sql.ResultSetMetaData;
 import java.sql.RowId;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.sql.SQLWarning;
 import java.sql.SQLXML;
+import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
+import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-public class ResultSetImpl extends BaseResultSet implements ResultSet, ResultSetMetaData {
+public final class ResultSetImpl implements ResultSet, ResultSetMetaData, SQLiteResultCodes {
+    protected final StatementImpl stmt;
 
-    public ResultSetImpl(CoreStatement stmt) {
-        super(stmt);
+    /** If the result set does not have any rows. */
+    public boolean emptyResultSet = false;
+
+    /** If the result set is open. Doesn't mean it has results. */
+    public boolean open = false;
+
+    /** Maximum number of rows as set by a Statement */
+    public long maxRows;
+
+    /** if null, the RS is closed() */
+    public String[] cols = null;
+
+    /** same as cols, but used by Meta interface */
+    public String[] colsMeta = null;
+
+    protected boolean[][] meta = null;
+
+    /** 0 means no limit, must check against maxRows */
+    protected int limitRows;
+
+    /** number of current row, starts at 1 (0 is for before loading data) */
+    protected int row = 0;
+
+    protected boolean pastLastRow = false;
+
+    /** last column accessed, for wasNull(). -1 if none */
+    protected int lastCol;
+
+    public boolean closeStmt;
+    protected Map<String, Integer> columnNameToIndex = null;
+
+    /**
+     * Default constructor for a given statement.
+     *
+     * @param stmt The statement.
+     */
+    public ResultSetImpl(StatementImpl stmt) {
+        this.stmt = stmt;
+    }
+
+    // INTERNAL FUNCTIONS ///////////////////////////////////////////
+
+    protected SQLiteDatabase getDatabase() {
+        return stmt.getDatabase();
+    }
+
+    protected SQLiteConnectionConfig getConnectionConfig() {
+        return stmt.getConnectionConfig();
+    }
+
+    /**
+     * Checks the status of the result set.
+     *
+     * @return True if has results and can iterate them; false otherwise.
+     */
+    public boolean isOpen() {
+        return open;
+    }
+
+    /**
+     * @throws SQLException if ResultSet is not open.
+     */
+    protected void checkOpen() throws SQLException {
+        if (!open || stmt.conn.isClosed()) {
+            throw new SQLException("ResultSet closed");
+        }
+    }
+
+    /**
+     * Takes col in [1,x] form, returns in [0,x-1] form
+     *
+     * @return
+     */
+    public int checkCol(int col) throws SQLException {
+        if (colsMeta == null) {
+            throw new SQLException("SQLite JDBC: inconsistent internal state");
+        }
+        if (col < 1 || col > colsMeta.length) {
+            throw new SQLException("column " + col + " out of bounds [1," + colsMeta.length + "]");
+        }
+        return --col;
+    }
+
+    /**
+     * Takes col in [1,x] form, marks it as last accessed and returns [0,x-1]
+     *
+     * @return
+     */
+    protected int markCol(int col) throws SQLException {
+        checkCol(col);
+        lastCol = col;
+        return --col;
+    }
+
+    public void checkMeta() throws SQLException {
+        checkCol(1);
+        if (meta == null) {
+            meta = stmt.pointer.safeRun(SQLiteDatabase::column_metadata);
+        }
+    }
+
+    private void closeInternal() throws SQLException {
+        cols = null;
+        colsMeta = null;
+        meta = null;
+        limitRows = 0;
+        row = 0;
+        pastLastRow = false;
+        lastCol = -1;
+        columnNameToIndex = null;
+        emptyResultSet = false;
+
+        if (stmt.pointer.isClosed() || (!open && !closeStmt)) {
+            return;
+        }
+
+        SQLiteDatabase db = stmt.getDatabase();
+        synchronized (db) {
+            if (!stmt.pointer.isClosed()) {
+                stmt.pointer.safeRunInt(SQLiteDatabase::reset);
+
+                if (closeStmt) {
+                    closeStmt = false; // break recursive call
+                    ((Statement) stmt).close();
+                }
+            }
+        }
+
+        open = false;
+    }
+
+    protected Integer findColumnIndexInCache(String col) {
+        if (columnNameToIndex == null) {
+            return null;
+        }
+        return columnNameToIndex.get(col);
+    }
+
+    protected int addColumnIndexInCache(String col, int index) {
+        if (columnNameToIndex == null) {
+            columnNameToIndex = new HashMap<String, Integer>(cols.length);
+        }
+        columnNameToIndex.put(col, index);
+        return index;
+    }
+
+    // ResultSet Functions //////////////////////////////////////////
+
+    /**
+     * returns col in [1,x] form
+     *
+     * @see java.sql.ResultSet#findColumn(java.lang.String)
+     */
+    public int findColumn(String col) throws SQLException {
+        checkOpen();
+        Integer index = findColumnIndexInCache(col);
+        if (index != null) {
+            return index;
+        }
+        for (int i = 0; i < cols.length; i++) {
+            if (col.equalsIgnoreCase(cols[i])) {
+                return addColumnIndexInCache(col, i + 1);
+            }
+        }
+        throw new SQLException("no such column: '" + col + "'");
+    }
+
+    public boolean next() throws SQLException {
+        if (stmt.conn.isClosed()) throw new SQLException("ResultSet closed");
+        if (!open || emptyResultSet || pastLastRow) {
+            return false; // finished ResultSet
+        }
+        lastCol = -1;
+
+        // first row is loaded by execute(), so do not step() again
+        if (row == 0) {
+            row++;
+            return true;
+        }
+
+        // check if we are row limited by the statement or the ResultSet
+        if (maxRows != 0 && row == maxRows) {
+            return false;
+        }
+
+        // do the real work
+        int statusCode = stmt.pointer.safeRunInt(SQLiteDatabase::step);
+        switch (statusCode) {
+            case SQLITE_DONE:
+                pastLastRow = true;
+                return false;
+            case SQLITE_ROW:
+                row++;
+                return true;
+            case SQLITE_BUSY:
+            default:
+                getDatabase().throwex(statusCode);
+                return false;
+        }
+    }
+
+    public int getType() {
+        return ResultSet.TYPE_FORWARD_ONLY;
+    }
+
+    public int getFetchSize() {
+        return limitRows;
+    }
+
+    public void setFetchSize(int rows) throws SQLException {
+        if (0 > rows || (maxRows != 0 && rows > maxRows)) {
+            throw new SQLException("fetch size " + rows + " out of bounds " + maxRows);
+        }
+        limitRows = rows;
+    }
+
+    public int getFetchDirection() throws SQLException {
+        checkOpen();
+        return ResultSet.FETCH_FORWARD;
+    }
+
+    public void setFetchDirection(int d) throws SQLException {
+        checkOpen();
+        // Only FORWARD_ONLY ResultSets exist in SQLite, so only FETCH_FORWARD is permitted
+        if (
+        /*getType() == ResultSet.TYPE_FORWARD_ONLY &&*/
+        d != ResultSet.FETCH_FORWARD) {
+            throw new SQLException("only FETCH_FORWARD direction supported");
+        }
+    }
+
+    public boolean isAfterLast() {
+        return pastLastRow && !emptyResultSet;
+    }
+
+    public boolean isBeforeFirst() {
+        return !emptyResultSet && open && row == 0;
+    }
+
+    public boolean isFirst() {
+        return row == 1;
+    }
+
+    public boolean isLast() throws SQLException {
+        throw new SQLFeatureNotSupportedException("not supported by sqlite");
+    }
+
+    public int getRow() {
+        return row;
+    }
+
+    public boolean wasNull() throws SQLException {
+        return safeGetColumnType(markCol(lastCol)) == SQLITE_NULL;
+    }
+
+    // DATA ACCESS FUNCTIONS ////////////////////////////////////////
+
+    public BigDecimal getBigDecimal(int col) throws SQLException {
+        switch (safeGetColumnType(checkCol(col))) {
+            case SQLITE_NULL:
+                return null;
+            case SQLITE_INTEGER:
+                return BigDecimal.valueOf(safeGetLongCol(col));
+            case SQLITE_FLOAT:
+            // avoid double precision
+            default:
+                final String stringValue = safeGetColumnText(col);
+                try {
+                    return new BigDecimal(stringValue);
+                } catch (NumberFormatException e) {
+                    throw new SQLException("Bad value for type BigDecimal : " + stringValue);
+                }
+        }
+    }
+
+    public BigDecimal getBigDecimal(String col) throws SQLException {
+        return getBigDecimal(findColumn(col));
+    }
+
+    public boolean getBoolean(int col) throws SQLException {
+        return getInt(col) != 0;
+    }
+
+    public boolean getBoolean(String col) throws SQLException {
+        return getBoolean(findColumn(col));
+    }
+
+    public InputStream getBinaryStream(int col) throws SQLException {
+        byte[] bytes = getBytes(col);
+        if (bytes != null) {
+            return new ByteArrayInputStream(bytes);
+        } else {
+            return null;
+        }
+    }
+
+    public InputStream getBinaryStream(String col) throws SQLException {
+        return getBinaryStream(findColumn(col));
+    }
+
+    public byte getByte(int col) throws SQLException {
+        return (byte) getInt(col);
+    }
+
+    public byte getByte(String col) throws SQLException {
+        return getByte(findColumn(col));
+    }
+
+    public byte[] getBytes(int col) throws SQLException {
+        return stmt.pointer.safeRun((db, ptr) -> db.column_blob(ptr, markCol(col)));
+    }
+
+    public byte[] getBytes(String col) throws SQLException {
+        return getBytes(findColumn(col));
+    }
+
+    public Reader getCharacterStream(int col) throws SQLException {
+        String string = getString(col);
+        return string == null ? null : new StringReader(string);
+    }
+
+    public Reader getCharacterStream(String col) throws SQLException {
+        return getCharacterStream(findColumn(col));
+    }
+
+    public Date getDate(int col) throws SQLException {
+        switch (safeGetColumnType(markCol(col))) {
+            case SQLITE_NULL:
+                return null;
+
+            case SQLITE_TEXT:
+                String dateText = safeGetColumnText(col);
+                if ("".equals(dateText)) {
+                    return null;
+                }
+                try {
+                    return new Date(getConnectionConfig().parseDate(dateText).getTime());
+                } catch (Exception e) {
+                    throw new SQLException("Error parsing date", e);
+                }
+
+            case SQLITE_FLOAT:
+                return new Date(julianDateToCalendar(safeGetDoubleCol(col)).getTimeInMillis());
+
+            default: // SQLITE_INTEGER:
+                return new Date(safeGetLongCol(col) * getConnectionConfig().getDateMultiplier());
+        }
+    }
+
+    public Date getDate(int col, Calendar cal) throws SQLException {
+        requireCalendarNotNull(cal);
+        switch (safeGetColumnType(markCol(col))) {
+            case SQLITE_NULL:
+                return null;
+
+            case SQLITE_TEXT:
+                String dateText = safeGetColumnText(col);
+                if ("".equals(dateText)) {
+                    return null;
+                }
+                try {
+                    return new java.sql.Date(
+                            getConnectionConfig().parseDate(dateText, cal.getTimeZone()).getTime());
+                } catch (Exception e) {
+                    throw new SQLException("Error parsing time stamp", e);
+                }
+
+            case SQLITE_FLOAT:
+                return new Date(julianDateToCalendar(safeGetDoubleCol(col), cal).getTimeInMillis());
+
+            default: // SQLITE_INTEGER:
+                cal.setTimeInMillis(
+                        safeGetLongCol(col) * getConnectionConfig().getDateMultiplier());
+                return new Date(cal.getTime().getTime());
+        }
+    }
+
+    public Date getDate(String col) throws SQLException {
+        return getDate(findColumn(col), Calendar.getInstance());
+    }
+
+    public Date getDate(String col, Calendar cal) throws SQLException {
+        return getDate(findColumn(col), cal);
+    }
+
+    public double getDouble(int col) throws SQLException {
+        if (safeGetColumnType(markCol(col)) == SQLITE_NULL) {
+            return 0;
+        }
+        return safeGetDoubleCol(col);
+    }
+
+    public double getDouble(String col) throws SQLException {
+        return getDouble(findColumn(col));
+    }
+
+    public float getFloat(int col) throws SQLException {
+        if (safeGetColumnType(markCol(col)) == SQLITE_NULL) {
+            return 0;
+        }
+        return (float) safeGetDoubleCol(col);
+    }
+
+    public float getFloat(String col) throws SQLException {
+        return getFloat(findColumn(col));
+    }
+
+    public int getInt(int col) throws SQLException {
+        return stmt.pointer.safeRunInt((db, ptr) -> db.column_int(ptr, markCol(col)));
+    }
+
+    public int getInt(String col) throws SQLException {
+        return getInt(findColumn(col));
+    }
+
+    public long getLong(int col) throws SQLException {
+        return safeGetLongCol(col);
+    }
+
+    public long getLong(String col) throws SQLException {
+        return getLong(findColumn(col));
+    }
+
+    public short getShort(int col) throws SQLException {
+        return (short) getInt(col);
+    }
+
+    public short getShort(String col) throws SQLException {
+        return getShort(findColumn(col));
+    }
+
+    public String getString(int col) throws SQLException {
+        return safeGetColumnText(col);
+    }
+
+    public String getString(String col) throws SQLException {
+        return getString(findColumn(col));
+    }
+
+    public Time getTime(int col) throws SQLException {
+        switch (safeGetColumnType(markCol(col))) {
+            case SQLITE_NULL:
+                return null;
+
+            case SQLITE_TEXT:
+                String dateText = safeGetColumnText(col);
+                if ("".equals(dateText)) {
+                    return null;
+                }
+                try {
+                    return new Time(getConnectionConfig().parseDate(dateText).getTime());
+                } catch (Exception e) {
+                    throw new SQLException("Error parsing time", e);
+                }
+
+            case SQLITE_FLOAT:
+                return new Time(julianDateToCalendar(safeGetDoubleCol(col)).getTimeInMillis());
+
+            default: // SQLITE_INTEGER
+                return new Time(safeGetLongCol(col) * getConnectionConfig().getDateMultiplier());
+        }
+    }
+
+    public Time getTime(int col, Calendar cal) throws SQLException {
+        requireCalendarNotNull(cal);
+        switch (safeGetColumnType(markCol(col))) {
+            case SQLITE_NULL:
+                return null;
+
+            case SQLITE_TEXT:
+                String dateText = safeGetColumnText(col);
+                if ("".equals(dateText)) {
+                    return null;
+                }
+                try {
+                    return new Time(
+                            getConnectionConfig().parseDate(dateText, cal.getTimeZone()).getTime());
+                } catch (Exception e) {
+                    throw new SQLException("Error parsing time", e);
+                }
+
+            case SQLITE_FLOAT:
+                return new Time(julianDateToCalendar(safeGetDoubleCol(col), cal).getTimeInMillis());
+
+            default: // SQLITE_INTEGER
+                cal.setTimeInMillis(
+                        safeGetLongCol(col) * getConnectionConfig().getDateMultiplier());
+                return new Time(cal.getTime().getTime());
+        }
+    }
+
+    public Time getTime(String col) throws SQLException {
+        return getTime(findColumn(col));
+    }
+
+    public Time getTime(String col, Calendar cal) throws SQLException {
+        return getTime(findColumn(col), cal);
+    }
+
+    public Timestamp getTimestamp(int col) throws SQLException {
+        switch (safeGetColumnType(markCol(col))) {
+            case SQLITE_NULL:
+                return null;
+
+            case SQLITE_TEXT:
+                String dateText = safeGetColumnText(col);
+                if ("".equals(dateText)) {
+                    return null;
+                }
+                try {
+                    return new Timestamp(getConnectionConfig().parseDate(dateText).getTime());
+                } catch (Exception e) {
+                    throw new SQLException("Error parsing time stamp", e);
+                }
+
+            case SQLITE_FLOAT:
+                return new Timestamp(julianDateToCalendar(safeGetDoubleCol(col)).getTimeInMillis());
+
+            default: // SQLITE_INTEGER:
+                return new Timestamp(
+                        safeGetLongCol(col) * getConnectionConfig().getDateMultiplier());
+        }
+    }
+
+    public Timestamp getTimestamp(int col, Calendar cal) throws SQLException {
+        requireCalendarNotNull(cal);
+        switch (safeGetColumnType(markCol(col))) {
+            case SQLITE_NULL:
+                return null;
+
+            case SQLITE_TEXT:
+                String dateText = safeGetColumnText(col);
+                if ("".equals(dateText)) {
+                    return null;
+                }
+                try {
+                    return new Timestamp(
+                            getConnectionConfig().parseDate(dateText, cal.getTimeZone()).getTime());
+                } catch (Exception e) {
+                    throw new SQLException("Error parsing time stamp", e);
+                }
+
+            case SQLITE_FLOAT:
+                return new Timestamp(julianDateToCalendar(safeGetDoubleCol(col)).getTimeInMillis());
+
+            default: // SQLITE_INTEGER
+                cal.setTimeInMillis(
+                        safeGetLongCol(col) * getConnectionConfig().getDateMultiplier());
+
+                return new Timestamp(cal.getTime().getTime());
+        }
+    }
+
+    public Timestamp getTimestamp(String col) throws SQLException {
+        return getTimestamp(findColumn(col));
+    }
+
+    public Timestamp getTimestamp(String c, Calendar ca) throws SQLException {
+        return getTimestamp(findColumn(c), ca);
+    }
+
+    public Object getObject(int col) throws SQLException {
+        switch (safeGetColumnType(markCol(col))) {
+            case SQLITE_INTEGER:
+                long val = getLong(col);
+                if (val > Integer.MAX_VALUE || val < Integer.MIN_VALUE) {
+                    return new Long(val);
+                } else {
+                    return new Integer((int) val);
+                }
+            case SQLITE_FLOAT:
+                return new Double(getDouble(col));
+            case SQLITE_BLOB:
+                return getBytes(col);
+            case SQLITE_NULL:
+                return null;
+            case SQLITE_TEXT:
+            default:
+                return getString(col);
+        }
+    }
+
+    public Object getObject(String col) throws SQLException {
+        return getObject(findColumn(col));
+    }
+
+    public Statement getStatement() {
+        return (Statement) stmt;
+    }
+
+    public String getCursorName() {
+        return null;
+    }
+
+    public SQLWarning getWarnings() {
+        return null;
+    }
+
+    public void clearWarnings() {}
+
+    // ResultSetMetaData Functions //////////////////////////////////
+
+    /** Pattern used to extract the column type name from table column definition. */
+    protected static final Pattern COLUMN_TYPENAME = Pattern.compile("([^\\(]*)");
+
+    /** Pattern used to extract the column type name from a cast(col as type) */
+    protected static final Pattern COLUMN_TYPECAST =
+            Pattern.compile("cast\\(.*?\\s+as\\s+(.*?)\\s*\\)");
+
+    /**
+     * Pattern used to extract the precision and scale from column meta returned by the JDBC driver.
+     */
+    protected static final Pattern COLUMN_PRECISION = Pattern.compile(".*?\\((.*?)\\)");
+
+    // we do not need to check the RS is open, only that colsMeta
+    // is not null, done with checkCol(int).
+
+    public ResultSetMetaData getMetaData() {
+        return (ResultSetMetaData) this;
+    }
+
+    public String getCatalogName(int col) throws SQLException {
+        return "";
+    }
+
+    public String getColumnClassName(int col) throws SQLException {
+        switch (safeGetColumnType(markCol(col))) {
+            case SQLITE_INTEGER:
+                long val = getLong(col);
+                if (val > Integer.MAX_VALUE || val < Integer.MIN_VALUE) {
+                    return "java.lang.Long";
+                } else {
+                    return "java.lang.Integer";
+                }
+            case SQLITE_FLOAT:
+                return "java.lang.Double";
+            case SQLITE_BLOB:
+            case SQLITE_NULL:
+                return "java.lang.Object";
+            case SQLITE_TEXT:
+            default:
+                return "java.lang.String";
+        }
+    }
+
+    public int getColumnCount() throws SQLException {
+        checkCol(1);
+        return colsMeta.length;
+    }
+
+    public int getColumnDisplaySize(int col) {
+        return Integer.MAX_VALUE;
+    }
+
+    public String getColumnLabel(int col) throws SQLException {
+        return getColumnName(col);
+    }
+
+    public String getColumnName(int col) throws SQLException {
+        return safeGetColumnName(col);
+    }
+
+    public int getColumnType(int col) throws SQLException {
+        String typeName = getColumnTypeName(col);
+        int valueType = safeGetColumnType(checkCol(col));
+
+        if (valueType == SQLITE_INTEGER || valueType == SQLITE_NULL) {
+            if ("BOOLEAN".equals(typeName)) {
+                return Types.BOOLEAN;
+            }
+
+            if ("TINYINT".equals(typeName)) {
+                return Types.TINYINT;
+            }
+
+            if ("SMALLINT".equals(typeName) || "INT2".equals(typeName)) {
+                return Types.SMALLINT;
+            }
+
+            if ("BIGINT".equals(typeName)
+                    || "INT8".equals(typeName)
+                    || "UNSIGNED BIG INT".equals(typeName)) {
+                return Types.BIGINT;
+            }
+
+            if ("DATE".equals(typeName)) {
+                return Types.DATE;
+            }
+
+            if ("DATETIME".equals(typeName) || "TIMESTAMP".equals(typeName)) {
+                return Types.TIMESTAMP;
+            }
+
+            if (valueType == SQLITE_INTEGER
+                    || "INT".equals(typeName)
+                    || "INTEGER".equals(typeName)
+                    || "MEDIUMINT".equals(typeName)) {
+                long val = getLong(col);
+                if (val > Integer.MAX_VALUE || val < Integer.MIN_VALUE) {
+                    return Types.BIGINT;
+                } else {
+                    return Types.INTEGER;
+                }
+            }
+        }
+
+        if (valueType == SQLITE_FLOAT || valueType == SQLITE_NULL) {
+            if ("DECIMAL".equals(typeName)) {
+                return Types.DECIMAL;
+            }
+
+            if ("DOUBLE".equals(typeName) || "DOUBLE PRECISION".equals(typeName)) {
+                return Types.DOUBLE;
+            }
+
+            if ("NUMERIC".equals(typeName)) {
+                return Types.NUMERIC;
+            }
+
+            if ("REAL".equals(typeName)) {
+                return Types.REAL;
+            }
+
+            if (valueType == SQLITE_FLOAT || "FLOAT".equals(typeName)) {
+                return Types.FLOAT;
+            }
+        }
+
+        if (valueType == SQLITE_TEXT || valueType == SQLITE_NULL) {
+            if ("CHARACTER".equals(typeName)
+                    || "NCHAR".equals(typeName)
+                    || "NATIVE CHARACTER".equals(typeName)
+                    || "CHAR".equals(typeName)) {
+                return Types.CHAR;
+            }
+
+            if ("CLOB".equals(typeName)) {
+                return Types.CLOB;
+            }
+
+            if ("DATE".equals(typeName)) {
+                return Types.DATE;
+            }
+
+            if ("DATETIME".equals(typeName) || "TIMESTAMP".equals(typeName)) {
+                return Types.TIMESTAMP;
+            }
+
+            if (valueType == SQLITE_TEXT
+                    || "VARCHAR".equals(typeName)
+                    || "VARYING CHARACTER".equals(typeName)
+                    || "NVARCHAR".equals(typeName)
+                    || "TEXT".equals(typeName)) {
+                return Types.VARCHAR;
+            }
+        }
+
+        if (valueType == SQLITE_BLOB || valueType == SQLITE_NULL) {
+            if ("BINARY".equals(typeName)) {
+                return Types.BINARY;
+            }
+
+            if (valueType == SQLITE_BLOB || "BLOB".equals(typeName)) {
+                return Types.BLOB;
+            }
+        }
+
+        return Types.NUMERIC;
+    }
+
+    /**
+     * @return The data type from either the 'create table' statement, or CAST(expr AS TYPE)
+     *     otherwise sqlite3_value_type.
+     * @see java.sql.ResultSetMetaData#getColumnTypeName(int)
+     */
+    public String getColumnTypeName(int col) throws SQLException {
+        String declType = getColumnDeclType(col);
+
+        if (declType != null) {
+            Matcher matcher = COLUMN_TYPENAME.matcher(declType);
+
+            matcher.find();
+            return matcher.group(1).toUpperCase(Locale.ENGLISH);
+        }
+
+        switch (safeGetColumnType(checkCol(col))) {
+            case SQLITE_INTEGER:
+                return "INTEGER";
+            case SQLITE_FLOAT:
+                return "FLOAT";
+            case SQLITE_BLOB:
+                return "BLOB";
+            case SQLITE_TEXT:
+                return "TEXT";
+            case SQLITE_NULL:
+            default:
+                return "NUMERIC";
+        }
+    }
+
+    public int getPrecision(int col) throws SQLException {
+        String declType = getColumnDeclType(col);
+
+        if (declType != null) {
+            Matcher matcher = COLUMN_PRECISION.matcher(declType);
+
+            return matcher.find() ? Integer.parseInt(matcher.group(1).split(",")[0].trim()) : 0;
+        }
+
+        return 0;
+    }
+
+    private String getColumnDeclType(int col) throws SQLException {
+        String declType = stmt.pointer.safeRun((db, ptr) -> db.column_decltype(ptr, checkCol(col)));
+
+        if (declType == null) {
+            Matcher matcher = COLUMN_TYPECAST.matcher(safeGetColumnName(col));
+            declType = matcher.find() ? matcher.group(1) : null;
+        }
+
+        return declType;
+    }
+
+    public int getScale(int col) throws SQLException {
+        String declType = getColumnDeclType(col);
+
+        if (declType != null) {
+            Matcher matcher = COLUMN_PRECISION.matcher(declType);
+
+            if (matcher.find()) {
+                String[] array = matcher.group(1).split(",");
+
+                if (array.length == 2) {
+                    return Integer.parseInt(array[1].trim());
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    public String getSchemaName(int col) {
+        return "";
+    }
+
+    public String getTableName(int col) throws SQLException {
+        final String tableName = safeGetColumnTableName(col);
+        if (tableName == null) {
+            // JDBC specifies an empty string instead of null
+            return "";
+        }
+        return tableName;
+    }
+
+    public int isNullable(int col) throws SQLException {
+        checkMeta();
+        return meta[checkCol(col)][0]
+                ? ResultSetMetaData.columnNoNulls
+                : ResultSetMetaData.columnNullable;
+    }
+
+    public boolean isAutoIncrement(int col) throws SQLException {
+        checkMeta();
+        return meta[checkCol(col)][2];
+    }
+
+    public boolean isCaseSensitive(int col) {
+        return true;
+    }
+
+    public boolean isCurrency(int col) {
+        return false;
+    }
+
+    public boolean isDefinitelyWritable(int col) {
+        return false;
+    }
+
+    public boolean isReadOnly(int col) {
+        return false;
+    }
+
+    public boolean isSearchable(int col) {
+        return true;
+    }
+
+    public boolean isSigned(int col) throws SQLException {
+        String typeName = getColumnTypeName(col);
+
+        return "NUMERIC".equals(typeName) || "INTEGER".equals(typeName) || "REAL".equals(typeName);
+    }
+
+    public boolean isWritable(int col) {
+        return true;
+    }
+
+    public int getConcurrency() {
+        return ResultSet.CONCUR_READ_ONLY;
+    }
+
+    public boolean rowDeleted() {
+        return false;
+    }
+
+    public boolean rowInserted() {
+        return false;
+    }
+
+    public boolean rowUpdated() {
+        return false;
+    }
+
+    /** Transforms a Julian Date to java.util.Calendar object. */
+    private Calendar julianDateToCalendar(Double jd) {
+        return julianDateToCalendar(jd, Calendar.getInstance());
+    }
+
+    /**
+     * Transforms a Julian Date to java.util.Calendar object. Based on Guine Christian's function
+     * found here:
+     * http://java.ittoolbox.com/groups/technical-functional/java-l/java-function-to-convert-julian-date-to-calendar-date-1947446
+     */
+    private Calendar julianDateToCalendar(Double jd, Calendar cal) {
+        if (jd == null) {
+            return null;
+        }
+
+        int yyyy, dd, mm, hh, mn, ss, ms, A;
+
+        double w = jd + 0.5;
+        int Z = (int) w;
+        double F = w - Z;
+
+        if (Z < 2299161) {
+            A = Z;
+        } else {
+            int alpha = (int) ((Z - 1867216.25) / 36524.25);
+            A = Z + 1 + alpha - (int) (alpha / 4.0);
+        }
+
+        int B = A + 1524;
+        int C = (int) ((B - 122.1) / 365.25);
+        int D = (int) (365.25 * C);
+        int E = (int) ((B - D) / 30.6001);
+
+        //  month
+        mm = E - ((E < 13.5) ? 1 : 13);
+
+        // year
+        yyyy = C - ((mm > 2.5) ? 4716 : 4715);
+
+        // Day
+        double jjd = B - D - (int) (30.6001 * E) + F;
+        dd = (int) jjd;
+
+        // Hour
+        double hhd = jjd - dd;
+        hh = (int) (24 * hhd);
+
+        // Minutes
+        double mnd = (24 * hhd) - hh;
+        mn = (int) (60 * mnd);
+
+        // Seconds
+        double ssd = (60 * mnd) - mn;
+        ss = (int) (60 * ssd);
+
+        // Milliseconds
+        double msd = (60 * ssd) - ss;
+        ms = (int) (1000 * msd);
+
+        cal.set(yyyy, mm - 1, dd, hh, mn, ss);
+        cal.set(Calendar.MILLISECOND, ms);
+
+        if (yyyy < 1) {
+            cal.set(Calendar.ERA, GregorianCalendar.BC);
+            cal.set(Calendar.YEAR, -(yyyy - 1));
+        }
+
+        return cal;
+    }
+
+    private void requireCalendarNotNull(Calendar cal) throws SQLException {
+        if (cal == null) {
+            throw new SQLException("Expected a calendar instance.", new IllegalArgumentException());
+        }
+    }
+
+    protected int safeGetColumnType(int col) throws SQLException {
+        return stmt.pointer.safeRunInt((db, ptr) -> db.column_type(ptr, col));
+    }
+
+    private long safeGetLongCol(int col) throws SQLException {
+        return stmt.pointer.safeRunLong((db, ptr) -> db.column_long(ptr, markCol(col)));
+    }
+
+    private double safeGetDoubleCol(int col) throws SQLException {
+        return stmt.pointer.safeRunDouble((db, ptr) -> db.column_double(ptr, markCol(col)));
+    }
+
+    private String safeGetColumnText(int col) throws SQLException {
+        return stmt.pointer.safeRun((db, ptr) -> db.column_text(ptr, markCol(col)));
+    }
+
+    private String safeGetColumnTableName(int col) throws SQLException {
+        return stmt.pointer.safeRun((db, ptr) -> db.column_table_name(ptr, checkCol(col)));
+    }
+
+    private String safeGetColumnName(int col) throws SQLException {
+        return stmt.pointer.safeRun((db, ptr) -> db.column_name(ptr, checkCol(col)));
     }
 
     @Override
     public void close() throws SQLException {
         final boolean wasOpen = isOpen(); // prevent close() recursion
-        super.close();
+        closeInternal();
         // close-on-completion regardless of closeStmt
         if (wasOpen && stmt instanceof StatementImpl) {
             StatementImpl stat = (StatementImpl) stmt;

@@ -9,6 +9,7 @@ import io.github.idoly.sqlite.SQLiteException;
 import io.github.idoly.sqlite.SQLiteFunction;
 import io.github.idoly.sqlite.SQLiteProgressHandler;
 import io.github.idoly.sqlite.SQLiteUpdateListener;
+import io.github.idoly.sqlite.internal.StatementImpl;
 import java.sql.BatchUpdateException;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -226,14 +227,14 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/prepare.html">https://www.sqlite.org/c3ref/prepare.html</a>
      */
-    public final synchronized void prepare(CoreStatement stmt) throws SQLException {
-        if (stmt.sql == null) {
+    public final synchronized void prepare(StatementImpl stmt) throws SQLException {
+        if (stmt.getSql() == null) {
             throw new NullPointerException();
         }
         if (stmt.pointer != null) {
             stmt.pointer.close();
         }
-        stmt.pointer = prepare(stmt.sql);
+        stmt.pointer = prepare(stmt.getSql());
         final boolean added = stmts.add(stmt.pointer);
         if (!added) {
             throw new IllegalStateException("Already added pointer to statements set");
@@ -336,7 +337,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_parameter_count.html">https://www.sqlite.org/c3ref/bind_parameter_count.html</a>
      */
-    abstract int bind_parameter_count(long stmt) throws SQLException;
+    public abstract int bind_parameter_count(long stmt) throws SQLException;
 
     /**
      * @param stmt Pointer to the statement.
@@ -765,7 +766,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      *     index[col][1] = true if column is part of the primary key; <br>
      *     index[col][2] = true if column is auto-increment.
      */
-    abstract boolean[][] column_metadata(long stmt) throws SQLException;
+    public abstract boolean[][] column_metadata(long stmt) throws SQLException;
 
     // COMPOUND FUNCTIONS ////////////////////////////////////////////
 
@@ -827,7 +828,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      *     commands execute successfully;
      * @throws SQLException if statement is not open or is being used elsewhere
      */
-    final synchronized long[] executeBatch(
+    public final synchronized long[] executeBatch(
             StatementHandle stmt, int count, Object[] vals, boolean autoCommit)
             throws SQLException {
         return stmt.safeRun((db, ptr) -> this.executeBatch(ptr, count, vals, autoCommit));
@@ -887,7 +888,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @param vals Array of parameter values.
      * @return True if a row of ResultSet is ready; false otherwise.
      */
-    public final synchronized boolean execute(CoreStatement stmt, Object[] vals)
+    public final synchronized boolean execute(StatementImpl stmt, Object[] vals)
             throws SQLException {
         int statusCode = stmt.pointer.safeRunInt((db, ptr) -> execute(ptr, vals));
         switch (statusCode & 0xFF) {
@@ -940,7 +941,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/exec.html">https://www.sqlite.org/c3ref/exec.html</a>
      */
-    final synchronized boolean execute(String sql, boolean autoCommit) throws SQLException {
+    public final synchronized boolean execute(String sql, boolean autoCommit) throws SQLException {
         int statusCode = _exec(sql);
         switch (statusCode) {
             case SQLITE_OK:
@@ -964,7 +965,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @return Number of database rows that were changed or inserted or deleted by the most recently
      *     completed SQL.
      */
-    public final synchronized long executeUpdate(CoreStatement stmt, Object[] vals)
+    public final synchronized long executeUpdate(StatementImpl stmt, Object[] vals)
             throws SQLException {
         try {
             if (execute(stmt, vals)) {

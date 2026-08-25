@@ -160,7 +160,7 @@ public final class FfmDatabase extends SQLiteDatabase {
     }
 
     @Override
-    synchronized int bind_parameter_count(long stmt) throws SQLException {
+    public synchronized int bind_parameter_count(long stmt) throws SQLException {
         return SQLiteFfmBindings.bindParameterCount(stmt);
     }
 
@@ -421,7 +421,7 @@ public final class FfmDatabase extends SQLiteDatabase {
     }
 
     @Override
-    synchronized boolean[][] column_metadata(long stmt) throws SQLException {
+    public synchronized boolean[][] column_metadata(long stmt) throws SQLException {
         int columns = column_count(stmt);
         boolean[][] metadata = new boolean[columns][3];
         long database = databasePointer();

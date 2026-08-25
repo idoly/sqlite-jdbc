@@ -1,6 +1,5 @@
 package io.github.idoly.sqlite;
 
-import io.github.idoly.sqlite.internal.ConnectionImpl;
 import java.sql.*;
 import java.util.Properties;
 
@@ -86,6 +85,6 @@ public final class SQLiteDriver implements Driver {
         }
 
         url = url.trim();
-        return new ConnectionImpl(url, extractAddress(url), prop);
+        return new SQLiteConnection(url, extractAddress(url), prop);
     }
 }

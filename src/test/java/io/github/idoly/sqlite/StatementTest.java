@@ -3,7 +3,6 @@ package io.github.idoly.sqlite;
 import static org.assertj.core.api.Assertions.*;
 import static org.assertj.core.data.Offset.offset;
 
-import io.github.idoly.sqlite.internal.BaseStatement;
 import io.github.idoly.sqlite.internal.StatementImpl;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -652,7 +651,7 @@ public class StatementTest {
 
         assertThat(stat.isWrapperFor(Statement.class)).isTrue();
         assertThat(stat.unwrap(Statement.class)).isEqualTo(stat);
-        assertThat(stat.unwrap(BaseStatement.class)).isEqualTo(stat);
+        assertThat(stat.unwrap(StatementImpl.class)).isEqualTo(stat);
 
         ResultSet rs = stat.executeQuery("select 1");
 
