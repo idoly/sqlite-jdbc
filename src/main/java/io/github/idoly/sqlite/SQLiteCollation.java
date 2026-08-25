@@ -43,7 +43,7 @@ public abstract class SQLiteCollation {
         }
         if (collation == null) throw new SQLException("collation must not be null");
 
-        if (sqliteConnection.getDatabase().create_collation(name, collation)
+        if (sqliteConnection.database().create_collation(name, collation)
                 != SQLiteResultCodes.SQLITE_OK) {
             throw new SQLException("error creating collation");
         }
@@ -60,7 +60,7 @@ public abstract class SQLiteCollation {
         if (name == null || name.isEmpty()) {
             throw new SQLException("collation name must not be empty");
         }
-        sqliteConnection.getDatabase().destroy_collation(name);
+        sqliteConnection.database().destroy_collation(name);
     }
 
     private static SQLiteConnection requireSQLiteConnection(Connection connection)

@@ -1,4 +1,4 @@
-package io.github.idoly.sqlite.util;
+package io.github.idoly.sqlite.ffm;
 
 import java.io.IOException;
 import java.nio.file.Files;

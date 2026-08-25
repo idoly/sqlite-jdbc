@@ -18,12 +18,12 @@ public abstract class SQLiteProgressHandler {
             throws SQLException {
         SQLiteConnection sqliteConnection = requireSQLiteConnection(connection);
         if (handler == null) {
-            sqliteConnection.getDatabase().clear_progress_handler();
+            sqliteConnection.database().clear_progress_handler();
         } else {
             if (virtualMachineCalls < 1) {
                 throw new SQLException("virtualMachineCalls must be >= 1");
             }
-            sqliteConnection.getDatabase().register_progress_handler(virtualMachineCalls, handler);
+            sqliteConnection.database().register_progress_handler(virtualMachineCalls, handler);
         }
     }
 
@@ -33,7 +33,7 @@ public abstract class SQLiteProgressHandler {
      * @param connection the SQLite connection
      */
     public static void clearHandler(Connection connection) throws SQLException {
-        requireSQLiteConnection(connection).getDatabase().clear_progress_handler();
+        requireSQLiteConnection(connection).database().clear_progress_handler();
     }
 
     private static SQLiteConnection requireSQLiteConnection(Connection connection)

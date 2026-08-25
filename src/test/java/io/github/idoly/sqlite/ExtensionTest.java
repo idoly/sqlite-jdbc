@@ -38,7 +38,7 @@ public class ExtensionTest {
                 (SQLiteConnection)
                         DriverManager.getConnection(
                                 "jdbc:sqlite::memory:?enable_load_extension=true");
-        assertThat(connection.getDatabase().getConfig().isEnabledLoadExtension()).isTrue();
+        assertThat(connection.database().getConfig().isEnabledLoadExtension()).isTrue();
     }
 
     @Test

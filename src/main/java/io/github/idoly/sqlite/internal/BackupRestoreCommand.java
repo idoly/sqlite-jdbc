@@ -1,5 +1,6 @@
-package io.github.idoly.sqlite;
+package io.github.idoly.sqlite.internal;
 
+import io.github.idoly.sqlite.SQLiteErrorCode;
 import io.github.idoly.sqlite.core.SQLiteDatabase;
 import java.sql.SQLException;
 import java.util.regex.Matcher;
@@ -10,7 +11,7 @@ import java.util.regex.Pattern;
  *
  * @author leo
  */
-public final class BackupRestoreCommand {
+final class BackupRestoreCommand {
     private BackupRestoreCommand() {}
 
     public interface Command {
@@ -137,7 +138,7 @@ public final class BackupRestoreCommand {
 
         /**
          * @see
-         *     io.github.idoly.sqlite.BackupRestoreCommand.Command#execute(io.github.idoly.sqlite.core.SQLiteDatabase)
+         *     io.github.idoly.sqlite.internal.BackupRestoreCommand.Command#execute(io.github.idoly.sqlite.core.SQLiteDatabase)
          */
         public void execute(SQLiteDatabase db) throws SQLException {
             int rc = db.restore(targetDB, srcFile, null);

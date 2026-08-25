@@ -18,7 +18,7 @@ public abstract class SQLiteBusyHandler {
             throw new SQLException("connection must be a SQLite connection");
         }
         if (connection.isClosed()) throw new SQLException("connection closed");
-        sqliteConnection.getDatabase().busy_handler(handler);
+        sqliteConnection.database().busy_handler(handler);
     }
 
     /**

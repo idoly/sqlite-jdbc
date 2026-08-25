@@ -3,8 +3,8 @@ package io.github.idoly.sqlite;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import io.github.idoly.sqlite.core.FfmDatabaseTestSupport;
 import io.github.idoly.sqlite.core.SQLiteDatabase;
+import io.github.idoly.sqlite.ffm.FfmDatabaseTestSupport;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -218,7 +218,7 @@ public class SQLiteBusyHandlerTest {
 
         SQLiteConnection sqliteConnection = (SQLiteConnection) conn;
         setDummyHandler();
-        final SQLiteDatabase database = sqliteConnection.getDatabase();
+        final SQLiteDatabase database = sqliteConnection.database();
         assertThat(FfmDatabaseTestSupport.getBusyHandler(database)).isNotEqualTo(0);
         SQLiteBusyHandler.clearHandler(conn);
         assertThat(FfmDatabaseTestSupport.getBusyHandler(database)).isEqualTo(0);

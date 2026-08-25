@@ -7,13 +7,13 @@
 // $URL$
 // $Author$
 // --------------------------------------
-package io.github.idoly.sqlite;
+package io.github.idoly.sqlite.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.idoly.sqlite.BackupRestoreCommand.BackupCommand;
-import io.github.idoly.sqlite.BackupRestoreCommand.Command;
-import io.github.idoly.sqlite.BackupRestoreCommand.RestoreCommand;
+import io.github.idoly.sqlite.internal.BackupRestoreCommand.BackupCommand;
+import io.github.idoly.sqlite.internal.BackupRestoreCommand.Command;
+import io.github.idoly.sqlite.internal.BackupRestoreCommand.RestoreCommand;
 import java.sql.SQLException;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;

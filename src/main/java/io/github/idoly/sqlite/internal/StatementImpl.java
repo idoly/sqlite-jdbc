@@ -1,12 +1,11 @@
 package io.github.idoly.sqlite.internal;
 
-import io.github.idoly.sqlite.BackupRestoreCommand;
-import io.github.idoly.sqlite.BackupRestoreCommand.Command;
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.SQLiteConnectionConfig;
 import io.github.idoly.sqlite.core.SQLiteDatabase;
 import io.github.idoly.sqlite.core.SQLiteResultCodes;
 import io.github.idoly.sqlite.core.StatementHandle;
+import io.github.idoly.sqlite.internal.BackupRestoreCommand.Command;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -19,6 +18,7 @@ import java.util.regex.Pattern;
 
 public class StatementImpl implements Statement, SQLiteResultCodes {
     public final SQLiteConnection conn;
+    protected final SQLiteDatabase database;
     protected final ResultSetImpl rs;
 
     public StatementHandle pointer;
@@ -38,18 +38,20 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
                     "^\\s*(?:with\\s+.+\\(.+?\\))*\\s*(?:insert|replace)\\s*",
                     Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
-    public StatementImpl(SQLiteConnection conn) {
-        this.conn = conn;
+    public StatementImpl(SQLiteConnection connection, SQLiteDatabase database) {
+        this.conn = connection;
+        this.database = database;
         this.rs = new ResultSetImpl(this);
         this.queryTimeout = 0;
     }
 
-    public SQLiteDatabase getDatabase() {
-        return conn.getDatabase();
+    SQLiteDatabase getDatabase() {
+        return database;
     }
 
-    public String getSql() {
-        return sql;
+    protected final void prepareStatement() throws SQLException {
+        if (pointer != null) pointer.close();
+        pointer = database.prepareStatement(sql);
     }
 
     public SQLiteConnectionConfig getConnectionConfig() {
@@ -85,7 +87,7 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
         boolean success = false;
         boolean rc = false;
         try {
-            rc = conn.getDatabase().execute(this, null);
+            rc = database.execute(pointer, null, conn.getAutoCommit());
             success = true;
         } finally {
             notifyFirstStatementExecuted();
@@ -115,7 +117,7 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
         boolean rc = false;
         boolean success = false;
         try {
-            rc = conn.getDatabase().execute(sql, conn.getAutoCommit());
+            rc = database.execute(sql, conn.getAutoCommit());
             success = true;
         } finally {
             notifyFirstStatementExecuted();
@@ -139,7 +141,7 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
             batchPos = 0;
             int resp = this.pointer.close();
 
-            if (resp != SQLITE_OK && resp != SQLITE_MISUSE) conn.getDatabase().throwex(resp);
+            if (resp != SQLITE_OK && resp != SQLITE_MISUSE) database.throwex(resp);
         }
     }
 
@@ -215,14 +217,14 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
                 () -> {
                     Command ext = BackupRestoreCommand.parse(sql);
                     if (ext != null) {
-                        ext.execute(conn.getDatabase());
+                        ext.execute(database);
 
                         return false;
                     }
 
                     StatementImpl.this.sql = sql;
                     synchronized (conn) {
-                        conn.getDatabase().prepare(StatementImpl.this);
+                        prepareStatement();
                         boolean result = exec();
                         updateGeneratedKeys();
                         updateCount = getDatabase().changes();
@@ -252,7 +254,7 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
 
         return this.withConnectionTimeout(
                 () -> {
-                    conn.getDatabase().prepare(StatementImpl.this);
+                    prepareStatement();
 
                     if (!exec()) {
                         internalClose();
@@ -279,7 +281,7 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
 
         return this.withConnectionTimeout(
                 () -> {
-                    SQLiteDatabase db = conn.getDatabase();
+                    SQLiteDatabase db = database;
                     long changes = 0;
                     Command ext = BackupRestoreCommand.parse(sql);
                     if (ext != null) {
@@ -351,7 +353,7 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
      * @see java.sql.Statement#getLargeUpdateCount()
      */
     public long getLargeUpdateCount() throws SQLException {
-        SQLiteDatabase db = conn.getDatabase();
+        SQLiteDatabase db = database;
         if (!pointer.isClosed()
                 && !rs.isOpen()
                 && !resultsWaiting
@@ -383,14 +385,14 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
         if (batch == null || batchPos == 0) return new long[] {};
 
         long[] changes = new long[batchPos];
-        SQLiteDatabase db = conn.getDatabase();
+        SQLiteDatabase db = database;
         synchronized (db) {
             try {
                 for (int i = 0; i < changes.length; i++) {
                     try {
                         this.sql = (String) batch[i];
-                        db.prepare(this);
-                        changes[i] = db.executeUpdate(this, null);
+                        prepareStatement();
+                        changes[i] = db.executeUpdate(pointer, null, conn.getAutoCommit());
                     } catch (SQLException e) {
                         // don't use the constructor with long because of
                         // https://github.com/xerial/sqlite-jdbc/issues/1378
@@ -425,7 +427,7 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
     }
 
     public void cancel() throws SQLException {
-        conn.getDatabase().interrupt();
+        database.interrupt();
     }
 
     public int getQueryTimeout() throws SQLException {

@@ -125,7 +125,7 @@ public class BackupTest {
                     };
 
             int rc =
-                    conn.getDatabase()
+                    conn.database()
                             .backup("main", tmpFile.getAbsolutePath(), progressObserver, 1, 1, 1);
             assertThat(rc).isEqualTo(SQLiteErrorCode.SQLITE_OK.code);
             assertThat(remainingStore.get()).isEqualTo(0);

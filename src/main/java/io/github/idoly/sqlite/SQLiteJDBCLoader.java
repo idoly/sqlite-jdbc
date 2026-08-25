@@ -1,6 +1,6 @@
 package io.github.idoly.sqlite;
 
-import io.github.idoly.sqlite.core.FfmDatabase;
+import io.github.idoly.sqlite.ffm.FfmDatabase;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Properties;

@@ -1,4 +1,4 @@
-package io.github.idoly.sqlite.core;
+package io.github.idoly.sqlite.ffm;
 
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
@@ -10,7 +10,8 @@ import io.github.idoly.sqlite.SQLiteBusyHandler;
 import io.github.idoly.sqlite.SQLiteCollation;
 import io.github.idoly.sqlite.SQLiteFunction;
 import io.github.idoly.sqlite.SQLiteProgressHandler;
-import io.github.idoly.sqlite.util.NativeLibraryResource;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
+import io.github.idoly.sqlite.core.SQLiteResultCodes;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.foreign.Arena;

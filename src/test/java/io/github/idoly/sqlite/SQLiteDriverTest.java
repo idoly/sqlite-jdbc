@@ -99,7 +99,7 @@ public class SQLiteDriverTest {
                 (SQLiteConnection)
                         DriverManager.getConnection(
                                 "jdbc:sqlite::memory:?jdbc.explicit_readonly=true");
-        assertThat(connection.getDatabase().getConfig().isExplicitReadOnly()).isTrue();
+        assertThat(connection.database().getConfig().isExplicitReadOnly()).isTrue();
     }
 
     @Test

@@ -1,8 +1,8 @@
 package io.github.idoly.sqlite;
 
 import io.github.idoly.sqlite.SQLiteConfig.TransactionMode;
-import io.github.idoly.sqlite.core.FfmDatabase;
 import io.github.idoly.sqlite.core.SQLiteDatabase;
+import io.github.idoly.sqlite.ffm.FfmDatabase;
 import io.github.idoly.sqlite.internal.DatabaseMetaDataImpl;
 import io.github.idoly.sqlite.internal.PreparedStatementImpl;
 import io.github.idoly.sqlite.internal.SavepointImpl;
@@ -74,7 +74,7 @@ public final class SQLiteConnection implements Connection {
             SQLiteConfig config = this.db.getConfig();
             this.connectionConfig = this.db.getConfig().newConnectionConfig();
             config.apply(this);
-            this.currentTransactionMode = this.getDatabase().getConfig().getTransactionMode();
+            this.currentTransactionMode = db.getConfig().getTransactionMode();
             // connection starts in "clean" state (even though some PRAGMA statements were executed)
             this.firstStatementExecuted = false;
         } catch (Throwable t) {
@@ -214,10 +214,10 @@ public final class SQLiteConnection implements Connection {
             case java.sql.Connection.TRANSACTION_REPEATABLE_READ:
             // Fall-through: Spec allows upgrading isolation to a higher level
             case java.sql.Connection.TRANSACTION_SERIALIZABLE:
-                getDatabase().exec("PRAGMA read_uncommitted = false;", getAutoCommit());
+                db.exec("PRAGMA read_uncommitted = false;", getAutoCommit());
                 break;
             case java.sql.Connection.TRANSACTION_READ_UNCOMMITTED:
-                getDatabase().exec("PRAGMA read_uncommitted = true;", getAutoCommit());
+                db.exec("PRAGMA read_uncommitted = true;", getAutoCommit());
                 break;
             default:
                 throw new SQLException(
@@ -340,7 +340,7 @@ public final class SQLiteConnection implements Connection {
         }
     }
 
-    public SQLiteDatabase getDatabase() {
+    SQLiteDatabase database() {
         return db;
     }
 
@@ -600,14 +600,14 @@ public final class SQLiteConnection implements Connection {
     @SuppressWarnings("deprecation")
     public void tryEnforceTransactionMode() throws SQLException {
         // important note: read-only mode is only supported when auto-commit is disabled
-        if (getDatabase().getConfig().isExplicitReadOnly()
+        if (db.getConfig().isExplicitReadOnly()
                 && !this.getAutoCommit()
                 && this.getCurrentTransactionMode() != null) {
             if (isReadOnly()) {
                 // this is a read-only transaction, make sure all writing operations are rejected by
                 // the SQLiteDatabase
                 // (note: this pragma is evaluated on a per-transaction basis by SQLite)
-                getDatabase()._exec("PRAGMA query_only = true;");
+                db._exec("PRAGMA query_only = true;");
             } else {
                 if (getCurrentTransactionMode() == TransactionMode.DEFERRED) {
                     if (isFirstStatementExecuted()) {
@@ -618,12 +618,11 @@ public final class SQLiteConnection implements Connection {
                     } else {
                         // this is the first statement in the transaction; close and create an
                         // immediate one
-                        getDatabase()._exec("commit; /* need to explicitly upgrade transaction */");
+                        db._exec("commit; /* need to explicitly upgrade transaction */");
 
                         // start the write transaction
-                        getDatabase()._exec("PRAGMA query_only = false;");
-                        getDatabase()
-                                ._exec("BEGIN IMMEDIATE; /* explicitly upgrade transaction */");
+                        db._exec("PRAGMA query_only = false;");
+                        db._exec("BEGIN IMMEDIATE; /* explicitly upgrade transaction */");
                         setCurrentTransactionMode(TransactionMode.IMMEDIATE);
                     }
                 }
@@ -669,7 +668,7 @@ public final class SQLiteConnection implements Connection {
     }
 
     public boolean isReadOnly() {
-        SQLiteConfig config = getDatabase().getConfig();
+        SQLiteConfig config = db.getConfig();
         return (
         // the entire database is read-only
         ((config.getOpenModeFlags() & SQLiteOpenMode.READONLY.flag) != 0)
@@ -678,7 +677,7 @@ public final class SQLiteConnection implements Connection {
     }
 
     public void setReadOnly(boolean ro) throws SQLException {
-        if (getDatabase().getConfig().isExplicitReadOnly()) {
+        if (db.getConfig().isExplicitReadOnly()) {
             if (ro != readOnly && isFirstStatementExecuted()) {
                 throw new SQLException(
                         "Cannot change Read-Only status of this connection: the first statement was"
@@ -756,7 +755,7 @@ public final class SQLiteConnection implements Connection {
     public Savepoint setSavepoint() throws SQLException {
         checkSavepointMode();
         SavepointImpl savepoint = new SavepointImpl(this, savePoint.incrementAndGet());
-        getDatabase().exec("SAVEPOINT " + quoteIdentifier(savepoint.sqliteName()), false);
+        db.exec("SAVEPOINT " + quoteIdentifier(savepoint.sqliteName()), false);
         return savepoint;
     }
 
@@ -764,7 +763,7 @@ public final class SQLiteConnection implements Connection {
         checkSavepointMode();
         if (name == null) throw new SQLException("savepoint name must not be null");
         SavepointImpl savepoint = new SavepointImpl(this, savePoint.incrementAndGet(), name);
-        getDatabase().exec("SAVEPOINT " + quoteIdentifier(savepoint.sqliteName()), false);
+        db.exec("SAVEPOINT " + quoteIdentifier(savepoint.sqliteName()), false);
         return savepoint;
     }
 
@@ -774,8 +773,7 @@ public final class SQLiteConnection implements Connection {
             throw new SQLException("database in auto-commit mode");
         }
         SavepointImpl sqliteSavepoint = requireSavepoint(savepoint);
-        getDatabase()
-                .exec("RELEASE SAVEPOINT " + quoteIdentifier(sqliteSavepoint.sqliteName()), false);
+        db.exec("RELEASE SAVEPOINT " + quoteIdentifier(sqliteSavepoint.sqliteName()), false);
     }
 
     public void rollback(Savepoint savepoint) throws SQLException {
@@ -784,10 +782,9 @@ public final class SQLiteConnection implements Connection {
             throw new SQLException("database in auto-commit mode");
         }
         SavepointImpl sqliteSavepoint = requireSavepoint(savepoint);
-        getDatabase()
-                .exec(
-                        "ROLLBACK TO SAVEPOINT " + quoteIdentifier(sqliteSavepoint.sqliteName()),
-                        getAutoCommit());
+        db.exec(
+                "ROLLBACK TO SAVEPOINT " + quoteIdentifier(sqliteSavepoint.sqliteName()),
+                getAutoCommit());
     }
 
     private void checkSavepointMode() throws SQLException {
@@ -815,7 +812,7 @@ public final class SQLiteConnection implements Connection {
         checkOpen();
         checkCursor(rst, rsc, rsh);
 
-        return new StatementImpl(this);
+        return new StatementImpl(this, db);
     }
 
     public PreparedStatement prepareStatement(String sql, int rst, int rsc, int rsh)
@@ -823,7 +820,7 @@ public final class SQLiteConnection implements Connection {
         checkOpen();
         checkCursor(rst, rsc, rsh);
 
-        return new PreparedStatementImpl(this, sql);
+        return new PreparedStatementImpl(this, db, sql);
     }
 
     // JDBC 4

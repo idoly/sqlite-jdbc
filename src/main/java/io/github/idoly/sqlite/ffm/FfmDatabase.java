@@ -1,10 +1,12 @@
-package io.github.idoly.sqlite.core;
+package io.github.idoly.sqlite.ffm;
 
 import io.github.idoly.sqlite.SQLiteBusyHandler;
 import io.github.idoly.sqlite.SQLiteCollation;
 import io.github.idoly.sqlite.SQLiteConfig;
 import io.github.idoly.sqlite.SQLiteFunction;
 import io.github.idoly.sqlite.SQLiteProgressHandler;
+import io.github.idoly.sqlite.core.SQLiteDatabase;
+import io.github.idoly.sqlite.core.StatementHandle;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -15,7 +17,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-/** SQLite backend implemented directly with the JDK Foreign SQLiteFunction and Memory API. */
+/** SQLite backend implemented directly with the JDK Foreign Function and Memory API. */
 public final class FfmDatabase extends SQLiteDatabase {
     private static final int DEFAULT_BACKUP_BUSY_SLEEP_TIME_MILLIS = 100;
     private static final int DEFAULT_BACKUP_NUM_BUSY_BEFORE_FAIL = 3;
@@ -120,7 +122,7 @@ public final class FfmDatabase extends SQLiteDatabase {
     }
 
     @Override
-    synchronized String errmsg() {
+    protected synchronized String errmsg() {
         return pointer == 0 ? "SQLite database is closed" : SQLiteFfmBindings.errorMessage(pointer);
     }
 
@@ -215,32 +217,32 @@ public final class FfmDatabase extends SQLiteDatabase {
     }
 
     @Override
-    synchronized int bind_null(long stmt, int pos) throws SQLException {
+    protected synchronized int bind_null(long stmt, int pos) throws SQLException {
         return SQLiteFfmBindings.bindNull(stmt, pos);
     }
 
     @Override
-    synchronized int bind_int(long stmt, int pos, int value) throws SQLException {
+    protected synchronized int bind_int(long stmt, int pos, int value) throws SQLException {
         return SQLiteFfmBindings.bindInt(stmt, pos, value);
     }
 
     @Override
-    synchronized int bind_long(long stmt, int pos, long value) throws SQLException {
+    protected synchronized int bind_long(long stmt, int pos, long value) throws SQLException {
         return SQLiteFfmBindings.bindLong(stmt, pos, value);
     }
 
     @Override
-    synchronized int bind_double(long stmt, int pos, double value) throws SQLException {
+    protected synchronized int bind_double(long stmt, int pos, double value) throws SQLException {
         return SQLiteFfmBindings.bindDouble(stmt, pos, value);
     }
 
     @Override
-    synchronized int bind_text(long stmt, int pos, String value) throws SQLException {
+    protected synchronized int bind_text(long stmt, int pos, String value) throws SQLException {
         return SQLiteFfmBindings.bindText(stmt, pos, stringToUtf8ByteArray(value));
     }
 
     @Override
-    synchronized int bind_blob(long stmt, int pos, byte[] value) throws SQLException {
+    protected synchronized int bind_blob(long stmt, int pos, byte[] value) throws SQLException {
         return SQLiteFfmBindings.bindBlob(stmt, pos, value);
     }
 
@@ -434,7 +436,7 @@ public final class FfmDatabase extends SQLiteDatabase {
     }
 
     @Override
-    synchronized void set_commit_listener(boolean enabled) {
+    protected synchronized void set_commit_listener(boolean enabled) {
         try {
             if (enabled && commitHookStub.address() == 0) {
                 commitHookStub = SQLiteFfmBindings.commitCallbackStub(callbackArena, this);
@@ -454,7 +456,7 @@ public final class FfmDatabase extends SQLiteDatabase {
     }
 
     @Override
-    synchronized void set_update_listener(boolean enabled) {
+    protected synchronized void set_update_listener(boolean enabled) {
         try {
             if (enabled && updateHookStub.address() == 0) {
                 updateHookStub = SQLiteFfmBindings.updateCallbackStub(callbackArena, this);

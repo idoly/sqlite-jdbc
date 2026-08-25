@@ -45,12 +45,12 @@ public final class PreparedStatementImpl extends StatementImpl
      * @param conn Connection on which to create the prepared statement.
      * @param sql The SQL script to prepare.
      */
-    public PreparedStatementImpl(SQLiteConnection conn, String sql) throws SQLException {
-        super(conn);
+    public PreparedStatementImpl(SQLiteConnection connection, SQLiteDatabase database, String sql)
+            throws SQLException {
+        super(connection, database);
 
         this.sql = sql;
-        SQLiteDatabase db = conn.getDatabase();
-        db.prepare(this);
+        prepareStatement();
         rs.colsMeta = pointer.safeRun(SQLiteDatabase::column_names);
         columnCount = pointer.safeRunInt(SQLiteDatabase::column_count);
         paramCount = pointer.safeRunInt(SQLiteDatabase::bind_parameter_count);
@@ -81,9 +81,8 @@ public final class PreparedStatementImpl extends StatementImpl
         return this.withConnectionTimeout(
                 () -> {
                     try {
-                        return conn.getDatabase()
-                                .executeBatch(
-                                        pointer, batchQueryCount, batch, conn.getAutoCommit());
+                        return database.executeBatch(
+                                pointer, batchQueryCount, batch, conn.getAutoCommit());
                     } finally {
                         clearBatch();
                     }
@@ -148,8 +147,7 @@ public final class PreparedStatementImpl extends StatementImpl
                     boolean success = false;
                     try {
                         synchronized (conn) {
-                            resultsWaiting =
-                                    conn.getDatabase().execute(PreparedStatementImpl.this, batch);
+                            resultsWaiting = database.execute(pointer, batch, conn.getAutoCommit());
                             updateGeneratedKeys();
                             success = true;
                             updateCount = getDatabase().changes();
@@ -179,8 +177,7 @@ public final class PreparedStatementImpl extends StatementImpl
                 () -> {
                     boolean success = false;
                     try {
-                        resultsWaiting =
-                                conn.getDatabase().execute(PreparedStatementImpl.this, batch);
+                        resultsWaiting = database.execute(pointer, batch, conn.getAutoCommit());
                         success = true;
                     } finally {
                         if (!success && !pointer.isClosed()) {
@@ -211,8 +208,7 @@ public final class PreparedStatementImpl extends StatementImpl
         return this.withConnectionTimeout(
                 () -> {
                     synchronized (conn) {
-                        long rc =
-                                conn.getDatabase().executeUpdate(PreparedStatementImpl.this, batch);
+                        long rc = database.executeUpdate(pointer, batch, conn.getAutoCommit());
                         updateGeneratedKeys();
                         return rc;
                     }

@@ -9,7 +9,6 @@ import io.github.idoly.sqlite.SQLiteException;
 import io.github.idoly.sqlite.SQLiteFunction;
 import io.github.idoly.sqlite.SQLiteProgressHandler;
 import io.github.idoly.sqlite.SQLiteUpdateListener;
-import io.github.idoly.sqlite.internal.StatementImpl;
 import java.sql.BatchUpdateException;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -101,7 +100,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/errcode.html">https://www.sqlite.org/c3ref/errcode.html</a>
      */
-    abstract String errmsg() throws SQLException;
+    protected abstract String errmsg() throws SQLException;
 
     /**
      * Returns the value for SQLITE_VERSION, SQLITE_VERSION_NUMBER, and SQLITE_SOURCE_ID C
@@ -221,24 +220,21 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
     }
 
     /**
-     * Complies the an SQL statement.
+     * Compiles an SQL statement and tracks its handle until finalization.
      *
-     * @param stmt The SQL statement to compile.
+     * @param sql SQL statement to compile.
+     * @return tracked statement handle
      * @see <a
      *     href="https://www.sqlite.org/c3ref/prepare.html">https://www.sqlite.org/c3ref/prepare.html</a>
      */
-    public final synchronized void prepare(StatementImpl stmt) throws SQLException {
-        if (stmt.getSql() == null) {
-            throw new NullPointerException();
+    public final synchronized StatementHandle prepareStatement(String sql) throws SQLException {
+        if (sql == null) throw new NullPointerException("sql");
+        StatementHandle statement = prepare(sql);
+        if (!stmts.add(statement)) {
+            statement.close();
+            throw new IllegalStateException("Already tracking statement handle");
         }
-        if (stmt.pointer != null) {
-            stmt.pointer.close();
-        }
-        stmt.pointer = prepare(stmt.getSql());
-        final boolean added = stmts.add(stmt.pointer);
-        if (!added) {
-            throw new IllegalStateException("Already added pointer to statements set");
-        }
+        return statement;
     }
 
     /**
@@ -436,7 +432,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @param pos The index of the SQL parameter to be set to NULL.
      * @return <a href="https://www.sqlite.org/c3ref/c_abort.html">Result SQLiteResultCodes</a>
      */
-    abstract int bind_null(long stmt, int pos) throws SQLException;
+    protected abstract int bind_null(long stmt, int pos) throws SQLException;
 
     /**
      * Binds int value to prepared statements with the pointer to the statement object, the index of
@@ -449,7 +445,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
-    abstract int bind_int(long stmt, int pos, int v) throws SQLException;
+    protected abstract int bind_int(long stmt, int pos, int v) throws SQLException;
 
     /**
      * Binds long value to prepared statements with the pointer to the statement object, the index
@@ -462,7 +458,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
-    abstract int bind_long(long stmt, int pos, long v) throws SQLException;
+    protected abstract int bind_long(long stmt, int pos, long v) throws SQLException;
 
     /**
      * Binds double value to prepared statements with the pointer to the statement object, the index
@@ -475,7 +471,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
-    abstract int bind_double(long stmt, int pos, double v) throws SQLException;
+    protected abstract int bind_double(long stmt, int pos, double v) throws SQLException;
 
     /**
      * Binds text value to prepared statements with the pointer to the statement object, the index
@@ -488,7 +484,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
-    abstract int bind_text(long stmt, int pos, String v) throws SQLException;
+    protected abstract int bind_text(long stmt, int pos, String v) throws SQLException;
 
     /**
      * Binds blob value to prepared statements with the pointer to the statement object, the index
@@ -501,7 +497,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @see <a
      *     href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a>
      */
-    abstract int bind_blob(long stmt, int pos, byte[] v) throws SQLException;
+    protected abstract int bind_blob(long stmt, int pos, byte[] v) throws SQLException;
 
     /**
      * Sets the result of an SQL function as NULL with the pointer to the SQLite database context.
@@ -888,12 +884,12 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @param vals Array of parameter values.
      * @return True if a row of ResultSet is ready; false otherwise.
      */
-    public final synchronized boolean execute(StatementImpl stmt, Object[] vals)
-            throws SQLException {
-        int statusCode = stmt.pointer.safeRunInt((db, ptr) -> execute(ptr, vals));
+    public final synchronized boolean execute(
+            StatementHandle statement, Object[] values, boolean autoCommit) throws SQLException {
+        int statusCode = statement.safeRunInt((database, pointer) -> execute(pointer, values));
         switch (statusCode & 0xFF) {
             case SQLITE_DONE:
-                ensureAutoCommit(stmt.conn.getAutoCommit());
+                ensureAutoCommit(autoCommit);
                 return false;
             case SQLITE_ROW:
                 return true;
@@ -903,7 +899,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
             case SQLITE_CONSTRAINT:
                 throw newSQLException(statusCode);
             default:
-                stmt.pointer.close();
+                statement.close();
                 throw newSQLException(statusCode);
         }
     }
@@ -965,23 +961,23 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
      * @return Number of database rows that were changed or inserted or deleted by the most recently
      *     completed SQL.
      */
-    public final synchronized long executeUpdate(StatementImpl stmt, Object[] vals)
-            throws SQLException {
+    public final synchronized long executeUpdate(
+            StatementHandle statement, Object[] values, boolean autoCommit) throws SQLException {
         try {
-            if (execute(stmt, vals)) {
+            if (execute(statement, values, autoCommit)) {
                 throw new SQLException("query returns results");
             }
         } finally {
-            if (!stmt.pointer.isClosed()) {
-                stmt.pointer.safeRunInt(SQLiteDatabase::reset);
+            if (!statement.isClosed()) {
+                statement.safeRunInt(SQLiteDatabase::reset);
             }
         }
         return changes();
     }
 
-    abstract void set_commit_listener(boolean enabled);
+    protected abstract void set_commit_listener(boolean enabled);
 
-    abstract void set_update_listener(boolean enabled);
+    protected abstract void set_update_listener(boolean enabled);
 
     public synchronized void addUpdateListener(SQLiteUpdateListener listener) {
         if (updateListeners.add(listener) && updateListeners.size() == 1) {
@@ -1007,7 +1003,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
         }
     }
 
-    void onUpdate(int type, String database, String table, long rowId) {
+    public final void onUpdate(int type, String database, String table, long rowId) {
         Set<SQLiteUpdateListener> listeners;
 
         synchronized (this) {
@@ -1035,7 +1031,7 @@ public abstract class SQLiteDatabase implements SQLiteResultCodes {
         }
     }
 
-    void onCommit(boolean commit) {
+    public final void onCommit(boolean commit) {
         Set<SQLiteCommitListener> listeners;
 
         synchronized (this) {

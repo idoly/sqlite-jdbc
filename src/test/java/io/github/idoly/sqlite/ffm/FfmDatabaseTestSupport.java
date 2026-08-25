@@ -1,4 +1,6 @@
-package io.github.idoly.sqlite.core;
+package io.github.idoly.sqlite.ffm;
+
+import io.github.idoly.sqlite.core.SQLiteDatabase;
 
 /** This is a helper class for exposing package local functions of FfmDatabase to unit tests */
 public class FfmDatabaseTestSupport {

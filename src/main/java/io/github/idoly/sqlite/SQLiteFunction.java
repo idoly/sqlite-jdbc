@@ -94,7 +94,7 @@ public abstract class SQLiteFunction {
         validateArgumentCount(argumentCount);
 
         function.conn = sqliteConnection;
-        function.db = sqliteConnection.getDatabase();
+        function.db = sqliteConnection.database();
         if (function.db.create_function(name, function, argumentCount, flags)
                 != SQLiteResultCodes.SQLITE_OK) {
             throw new SQLException("error creating function");
@@ -114,7 +114,7 @@ public abstract class SQLiteFunction {
         if (name == null || name.isEmpty())
             throw new SQLException("function name must not be empty");
         validateArgumentCount(argumentCount);
-        sqliteConnection.getDatabase().destroy_function(name, argumentCount);
+        sqliteConnection.database().destroy_function(name, argumentCount);
     }
 
     /**
@@ -257,13 +257,13 @@ public abstract class SQLiteFunction {
     }
 
     private void checkContext() throws SQLException {
-        if (conn == null || conn.getDatabase() == null || context == 0) {
+        if (conn == null || conn.database() == null || context == 0) {
             throw new SQLException("no context, not allowed to read value");
         }
     }
 
     private void checkValue(int arg) throws SQLException {
-        if (conn == null || conn.getDatabase() == null || value == 0) {
+        if (conn == null || conn.database() == null || value == 0) {
             throw new SQLException("not in value access state");
         }
         if (arg >= args) {

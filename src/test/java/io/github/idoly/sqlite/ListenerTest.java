@@ -2,8 +2,8 @@ package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.idoly.sqlite.core.FfmDatabaseTestSupport;
 import io.github.idoly.sqlite.core.SQLiteDatabase;
+import io.github.idoly.sqlite.ffm.FfmDatabaseTestSupport;
 import java.io.File;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -207,7 +207,7 @@ public class ListenerTest {
     @Test
     public void testUpdateHandlerCleanup() throws Exception {
         SQLiteConnection sqliteConnection = connectionOne;
-        final SQLiteDatabase database = sqliteConnection.getDatabase();
+        final SQLiteDatabase database = sqliteConnection.database();
 
         CountingSQLiteUpdateListener updateListener = new CountingSQLiteUpdateListener();
 
@@ -231,7 +231,7 @@ public class ListenerTest {
     @Test
     public void testCommitHandlerCleanup() throws Exception {
         SQLiteConnection sqliteConnection = connectionOne;
-        final SQLiteDatabase database = sqliteConnection.getDatabase();
+        final SQLiteDatabase database = sqliteConnection.database();
 
         CountingSQLiteCommitListener commitListener = new CountingSQLiteCommitListener();
         connectionOne.addCommitListener(commitListener);

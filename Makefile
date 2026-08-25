@@ -2,8 +2,9 @@
 include VERSION
 
 TARGET := target
-PLATFORM_CLASS := io.github.idoly.sqlite.util.NativePlatform
-PLATFORM_PROG := lib/io/github/idoly/sqlite/util/NativePlatform.class
+PLATFORM_CLASS := io.github.idoly.sqlite.ffm.NativePlatform
+PLATFORM_TOOL_DIR := $(TARGET)/tools
+PLATFORM_PROG := $(PLATFORM_TOOL_DIR)/io/github/idoly/sqlite/ffm/NativePlatform.class
 
 ifndef OS_NAME
 NEED_PLATFORM := 1
@@ -20,13 +21,13 @@ JAVA := "$(JAVA_HOME)/bin/java"
 JAVAC := "$(JAVA_HOME)/bin/javac"
 ifeq ("$(wildcard $(PLATFORM_PROG))","")
 $(info Building NativePlatform tool)
-$(shell mkdir -p lib && $(JAVAC) -d lib src/main/java/io/github/idoly/sqlite/util/NativePlatform.java)
+$(shell mkdir -p $(PLATFORM_TOOL_DIR) && $(JAVAC) -d $(PLATFORM_TOOL_DIR) src/main/java/io/github/idoly/sqlite/ffm/NativePlatform.java)
 endif
 ifndef OS_NAME
-OS_NAME := $(shell $(JAVA) -cp lib $(PLATFORM_CLASS) --os)
+OS_NAME := $(shell $(JAVA) -cp $(PLATFORM_TOOL_DIR) $(PLATFORM_CLASS) --os)
 endif
 ifndef OS_ARCH
-OS_ARCH := $(shell $(JAVA) -cp lib $(PLATFORM_CLASS) --arch)
+OS_ARCH := $(shell $(JAVA) -cp $(PLATFORM_TOOL_DIR) $(PLATFORM_CLASS) --arch)
 endif
 endif
 

@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 
-import io.github.idoly.sqlite.core.FfmDatabaseTestSupport;
 import io.github.idoly.sqlite.core.SQLiteDatabase;
+import io.github.idoly.sqlite.ffm.FfmDatabaseTestSupport;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -125,7 +125,7 @@ public class SQLiteProgressHandlerTest {
     @Test
     public void testClearProgressHelper() throws Exception {
         SQLiteConnection sqliteConnection = (SQLiteConnection) conn;
-        final SQLiteDatabase database = sqliteConnection.getDatabase();
+        final SQLiteDatabase database = sqliteConnection.database();
         setDummyHandler();
         assertThat(FfmDatabaseTestSupport.getProgressHandler(database)).isNotEqualTo(0);
         SQLiteProgressHandler.clearHandler(conn);

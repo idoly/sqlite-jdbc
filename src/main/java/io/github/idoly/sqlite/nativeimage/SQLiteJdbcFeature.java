@@ -1,10 +1,10 @@
 package io.github.idoly.sqlite.nativeimage;
 
 import io.github.idoly.sqlite.SQLiteJDBCLoader;
-import io.github.idoly.sqlite.core.FfmDatabase;
+import io.github.idoly.sqlite.ffm.FfmDatabase;
+import io.github.idoly.sqlite.ffm.NativeLibraryResource;
+import io.github.idoly.sqlite.ffm.NativePlatform;
 import io.github.idoly.sqlite.internal.DatabaseMetaDataImpl;
-import io.github.idoly.sqlite.util.NativeLibraryResource;
-import io.github.idoly.sqlite.util.NativePlatform;
 import java.lang.reflect.Method;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeClassInitialization;
