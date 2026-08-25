@@ -1,5 +1,7 @@
 package io.github.idoly.sqlite;
 
+import java.io.IOException;
+import java.net.URL;
 import java.sql.*;
 import java.util.Properties;
 
@@ -17,11 +19,20 @@ public final class SQLiteDriver implements Driver {
     }
 
     public int getMajorVersion() {
-        return SQLiteJDBCLoader.getMajorVersion();
+        return versionComponent(0, 1);
     }
 
     public int getMinorVersion() {
-        return SQLiteJDBCLoader.getMinorVersion();
+        return versionComponent(1, 0);
+    }
+
+    public static String getVersion() {
+        return VersionHolder.VERSION;
+    }
+
+    private static int versionComponent(int index, int fallback) {
+        String[] components = getVersion().split("\\.");
+        return components.length > index ? Integer.parseInt(components[index]) : fallback;
     }
 
     public boolean jdbcCompliant() {
@@ -86,5 +97,31 @@ public final class SQLiteDriver implements Driver {
 
         url = url.trim();
         return new SQLiteConnection(url, extractAddress(url), prop);
+    }
+
+    /** Holds version data so native-image can initialize it at build time. */
+    public static final class VersionHolder {
+        private static final String VERSION = loadVersion();
+
+        private VersionHolder() {}
+
+        private static String loadVersion() {
+            URL versionFile = VersionHolder.class.getResource("/sqlite-jdbc.properties");
+            String version = "unknown";
+            try {
+                if (versionFile != null) {
+                    Properties versionData = new Properties();
+                    try (var input = versionFile.openStream()) {
+                        versionData.load(input);
+                    }
+                    version = versionData.getProperty("version", version);
+                    version = version.trim().replaceAll("[^0-9\\.]", "");
+                }
+            } catch (IOException error) {
+                throw new IllegalStateException(
+                        "Could not read SQLite JDBC version from " + versionFile, error);
+            }
+            return version;
+        }
     }
 }

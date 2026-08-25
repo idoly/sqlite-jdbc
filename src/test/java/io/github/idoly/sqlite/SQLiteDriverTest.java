@@ -1,12 +1,3 @@
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// SQLiteDriverTest.java
-// Since: Apr 8, 2009
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.*;
@@ -22,29 +13,16 @@ import org.junit.jupiter.api.io.TempDir;
 
 public class SQLiteDriverTest {
     @Test
-    public void enableLoadExtensionTest() throws Exception {
-        Properties prop = new Properties();
-        prop.setProperty("enable_load_extension", "true");
+    public void versions() throws Exception {
+        Driver driver = DriverManager.getDriver("jdbc:sqlite:");
+        assertThat(driver.getMajorVersion()).isEqualTo(3);
+        assertThat(driver.getMinorVersion()).isEqualTo(53);
+        assertThat(SQLiteDriver.getVersion()).isEqualTo("3.53.2.2");
 
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:", prop)) {
-            Statement stat = conn.createStatement();
-
-            // How to build shared lib in Windows
-            // # mingw32-gcc -fPIC -c extension-function.c
-            // # mingw32-gcc -shared -Wl -o extension-function.dll extension-function.o
-
-            //            stat.executeQuery("select load_extension('extension-function.dll')");
-            //
-            //            ResultSet rs = stat.executeQuery("select sqrt(4)");
-            //            System.out.println(rs.getDouble(1));
-
+        try (SQLiteConnection connection =
+                SQLiteDriver.createConnection("jdbc:sqlite:", new Properties())) {
+            assertThat(connection.libversion()).isEqualTo("3.53.2");
         }
-    }
-
-    @Test
-    public void majorVersion() throws Exception {
-        int major = DriverManager.getDriver("jdbc:sqlite:").getMajorVersion();
-        int minor = DriverManager.getDriver("jdbc:sqlite:").getMinorVersion();
     }
 
     @Test
@@ -212,9 +190,6 @@ public class SQLiteDriverTest {
             connection.setReadOnly(true);
         }
     }
-
-    @Test
-    void name() {}
 
     @Test
     public void jdbcHammer(@TempDir File tempDir) throws Exception {

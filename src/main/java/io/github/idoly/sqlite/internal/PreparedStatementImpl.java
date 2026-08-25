@@ -8,9 +8,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -120,11 +120,11 @@ public final class PreparedStatementImpl extends StatementImpl
 
             case REAL:
                 // long to Julian date
-                batch(pos, new Double((value / 86400000.0) + 2440587.5));
+                batch(pos, Double.valueOf((value / 86400000.0) + 2440587.5));
                 break;
 
             default: // INTEGER:
-                batch(pos, new Long(value / config.getDateMultiplier()));
+                batch(pos, Long.valueOf(value / config.getDateMultiplier()));
         }
     }
 
@@ -255,19 +255,13 @@ public final class PreparedStatementImpl extends StatementImpl
         checkIndex(pos);
         Object paramValue = batch[pos - 1];
 
-        if (paramValue == null) {
-            return Types.NULL;
-        } else if (paramValue instanceof Integer
-                || paramValue instanceof Short
-                || paramValue instanceof Boolean) {
-            return Types.INTEGER;
-        } else if (paramValue instanceof Long) {
-            return Types.BIGINT;
-        } else if (paramValue instanceof Double || paramValue instanceof Float) {
-            return Types.REAL;
-        } else {
-            return Types.VARCHAR;
-        }
+        return switch (paramValue) {
+            case null -> Types.NULL;
+            case Integer _, Short _, Boolean _ -> Types.INTEGER;
+            case Long _ -> Types.BIGINT;
+            case Double _, Float _ -> Types.REAL;
+            default -> Types.VARCHAR;
+        };
     }
 
     public int getParameterMode(int pos) {
@@ -339,6 +333,7 @@ public final class PreparedStatementImpl extends StatementImpl
     public void setBinaryStream(int pos, InputStream istream, int length) throws SQLException {
         if (istream == null && length == 0) {
             setBytes(pos, null);
+            return;
         }
 
         setBytes(pos, readBytes(istream, length));
@@ -351,16 +346,10 @@ public final class PreparedStatementImpl extends StatementImpl
     public void setUnicodeStream(int pos, InputStream istream, int length) throws SQLException {
         if (istream == null && length == 0) {
             setString(pos, null);
+            return;
         }
 
-        try {
-            setString(pos, new String(readBytes(istream, length), "UTF-8"));
-        } catch (UnsupportedEncodingException e) {
-            SQLException exception = new SQLException("UTF-8 is not supported");
-
-            exception.initCause(e);
-            throw exception;
-        }
+        setString(pos, new String(readBytes(istream, length), StandardCharsets.UTF_8));
     }
 
     public void setBoolean(int pos, boolean value) throws SQLException {
@@ -376,19 +365,19 @@ public final class PreparedStatementImpl extends StatementImpl
     }
 
     public void setDouble(int pos, double value) throws SQLException {
-        batch(pos, new Double(value));
+        batch(pos, Double.valueOf(value));
     }
 
     public void setFloat(int pos, float value) throws SQLException {
-        batch(pos, new Float(value));
+        batch(pos, Float.valueOf(value));
     }
 
     public void setInt(int pos, int value) throws SQLException {
-        batch(pos, new Integer(value));
+        batch(pos, Integer.valueOf(value));
     }
 
     public void setLong(int pos, long value) throws SQLException {
-        batch(pos, new Long(value));
+        batch(pos, Long.valueOf(value));
     }
 
     public void setNull(int pos, int u1) throws SQLException {
@@ -400,28 +389,19 @@ public final class PreparedStatementImpl extends StatementImpl
     }
 
     public void setObject(int pos, Object value) throws SQLException {
-        if (value == null) {
-            batch(pos, null);
-        } else if (value instanceof java.util.Date) {
-            setDateByMilliseconds(pos, ((java.util.Date) value).getTime(), Calendar.getInstance());
-        } else if (value instanceof Long) {
-            batch(pos, value);
-        } else if (value instanceof Integer) {
-            batch(pos, value);
-        } else if (value instanceof Short) {
-            batch(pos, new Integer(((Short) value).intValue()));
-        } else if (value instanceof Float) {
-            batch(pos, value);
-        } else if (value instanceof Double) {
-            batch(pos, value);
-        } else if (value instanceof Boolean) {
-            setBoolean(pos, ((Boolean) value).booleanValue());
-        } else if (value instanceof byte[]) {
-            batch(pos, value);
-        } else if (value instanceof BigDecimal) {
-            setBigDecimal(pos, (BigDecimal) value);
-        } else {
-            batch(pos, value.toString());
+        switch (value) {
+            case null -> batch(pos, null);
+            case java.util.Date date ->
+                    setDateByMilliseconds(pos, date.getTime(), Calendar.getInstance());
+            case Long number -> batch(pos, number);
+            case Integer number -> batch(pos, number);
+            case Short number -> batch(pos, Integer.valueOf(number.intValue()));
+            case Float number -> batch(pos, number);
+            case Double number -> batch(pos, number);
+            case Boolean bool -> setBoolean(pos, bool);
+            case byte[] bytes -> batch(pos, bytes);
+            case BigDecimal decimal -> setBigDecimal(pos, decimal);
+            default -> batch(pos, value.toString());
         }
     }
 
@@ -606,7 +586,6 @@ public final class PreparedStatementImpl extends StatementImpl
         return sql + " \n parameters=" + Arrays.toString(batch);
     }
 
-    // JDBC 4
     public void setRowId(int parameterIndex, RowId x) throws SQLException {
         throw new SQLFeatureNotSupportedException();
     }

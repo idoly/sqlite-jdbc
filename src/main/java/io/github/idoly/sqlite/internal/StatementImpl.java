@@ -1,9 +1,10 @@
 package io.github.idoly.sqlite.internal;
 
+import static io.github.idoly.sqlite.core.SQLiteResultCodes.*;
+
 import io.github.idoly.sqlite.SQLiteConnection;
 import io.github.idoly.sqlite.SQLiteConnectionConfig;
 import io.github.idoly.sqlite.core.SQLiteDatabase;
-import io.github.idoly.sqlite.core.SQLiteResultCodes;
 import io.github.idoly.sqlite.core.StatementHandle;
 import io.github.idoly.sqlite.internal.BackupRestoreCommand.Command;
 import java.sql.BatchUpdateException;
@@ -16,7 +17,7 @@ import java.sql.Statement;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
-public class StatementImpl implements Statement, SQLiteResultCodes {
+public class StatementImpl implements Statement {
     public final SQLiteConnection conn;
     protected final SQLiteDatabase database;
     protected final ResultSetImpl rs;
@@ -207,8 +208,6 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
     private int queryTimeout; // in seconds, as per the JDBC spec
     protected long updateCount;
     protected boolean exhaustedResults = false;
-
-    // PUBLIC INTERFACE /////////////////////////////////////////////
 
     public boolean execute(final String sql) throws SQLException {
         internalClose();
@@ -602,7 +601,6 @@ public class StatementImpl implements Statement, SQLiteResultCodes {
         T call() throws SQLException;
     }
 
-    // JDBC 4
     public <T> T unwrap(Class<T> iface) throws SQLException {
         if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());
         return iface.cast(this);

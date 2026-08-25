@@ -7,9 +7,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledInNativeImage;
-import org.junitpioneer.jupiter.SetSystemProperty;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 @DisabledInNativeImage
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
 class NativePlatformTest {
     @Test
     void normalizesSupportedArchitectures() {
@@ -20,28 +22,34 @@ class NativePlatformTest {
     }
 
     @Test
-    @SetSystemProperty(key = "os.arch", value = "riscv64")
     void rejectsUnsupportedArchitecture() {
-        assertThatThrownBy(NativePlatform::getArchName)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("riscv64");
+        withSystemProperty(
+                "os.arch",
+                "riscv64",
+                () ->
+                        assertThatThrownBy(NativePlatform::getArchName)
+                                .isInstanceOf(IllegalStateException.class)
+                                .hasMessageContaining("riscv64"));
     }
 
     @Test
-    @SetSystemProperty(key = "os.name", value = "AIX")
     void rejectsUnsupportedOperatingSystem() {
-        assertThatThrownBy(NativePlatform::getOSName)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("AIX");
+        withSystemProperty(
+                "os.name",
+                "AIX",
+                () ->
+                        assertThatThrownBy(NativePlatform::getOSName)
+                                .isInstanceOf(IllegalStateException.class)
+                                .hasMessageContaining("AIX"));
     }
 
     @Test
     void packagedLibraryExistsForCurrentPlatform() {
-        String path = NativeLibraryResource.getNativeLibResourcePath();
-        String name = NativeLibraryResource.getNativeLibName();
+        String path = NativePlatform.getNativeLibResourcePath();
+        String name = NativePlatform.getNativeLibName();
         assertThat(NativePlatform.getNativeLibFolderPathForCurrentOS())
                 .isEqualTo(NativePlatform.getOSName() + "/" + NativePlatform.getArchName());
-        assertThat(NativeLibraryResource.hasNativeLib(path, name)).isTrue();
+        assertThat(NativePlatform.hasNativeLib(path, name)).isTrue();
     }
 
     @Test
@@ -52,18 +60,27 @@ class NativePlatformTest {
     }
 
     @Test
-    @SetSystemProperty(key = "io.github.idoly.sqlite.native.architecture", value = "custom")
     void architectureOverrideSupportsCrossCompilation() {
-        assertThat(NativePlatform.getArchName()).isEqualTo("custom");
+        withSystemProperty(
+                "io.github.idoly.sqlite.native.architecture",
+                "custom",
+                () -> assertThat(NativePlatform.getArchName()).isEqualTo("custom"));
     }
 
     private static void assertArchitecture(String input, String expected) {
-        String previous = System.setProperty("os.arch", input);
+        withSystemProperty(
+                "os.arch",
+                input,
+                () -> assertThat(NativePlatform.getArchName()).isEqualTo(expected));
+    }
+
+    private static void withSystemProperty(String key, String value, Runnable assertion) {
+        String previous = System.setProperty(key, value);
         try {
-            assertThat(NativePlatform.getArchName()).isEqualTo(expected);
+            assertion.run();
         } finally {
-            if (previous == null) System.clearProperty("os.arch");
-            else System.setProperty("os.arch", previous);
+            if (previous == null) System.clearProperty(key);
+            else System.setProperty(key, previous);
         }
     }
 

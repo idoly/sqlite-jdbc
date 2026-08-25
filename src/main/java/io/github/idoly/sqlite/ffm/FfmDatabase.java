@@ -1,5 +1,7 @@
 package io.github.idoly.sqlite.ffm;
 
+import static io.github.idoly.sqlite.core.SQLiteResultCodes.*;
+
 import io.github.idoly.sqlite.SQLiteBusyHandler;
 import io.github.idoly.sqlite.SQLiteCollation;
 import io.github.idoly.sqlite.SQLiteConfig;

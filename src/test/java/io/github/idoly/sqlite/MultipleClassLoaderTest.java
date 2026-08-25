@@ -1,27 +1,3 @@
-/*--------------------------------------------------------------------------
- *  Copyright 2007 Taro L. Saito
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *--------------------------------------------------------------------------*/
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// SQLiteJDBCLoaderTest.java
-// Since: Oct 15, 2007
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -105,17 +82,26 @@ public class MultipleClassLoaderTest {
                     () -> {
                         try {
                             Thread.sleep(sleepMillis * 10);
-                            // Create an isolated class loader, it should load *different* instances
-                            // of SQLiteJDBCLoader.class
-                            URLClassLoader classLoader =
+                            // Each isolated driver class loads its own FFM backend.
+                            try (URLClassLoader classLoader =
                                     new URLClassLoader(
-                                            jarUrl, ClassLoader.getSystemClassLoader().getParent());
-                            Class<?> clazz =
-                                    classLoader.loadClass(
-                                            "io.github.idoly.sqlite.SQLiteJDBCLoader");
-                            Method initMethod = clazz.getDeclaredMethod("initialize");
-                            initMethod.invoke(null);
-                            classLoader.close();
+                                            jarUrl,
+                                            ClassLoader.getSystemClassLoader().getParent())) {
+                                Class<?> driver =
+                                        classLoader.loadClass(
+                                                "io.github.idoly.sqlite.SQLiteDriver");
+                                Method connect =
+                                        driver.getDeclaredMethod(
+                                                "createConnection", String.class, Properties.class);
+                                try (Connection isolated =
+                                        (Connection)
+                                                connect.invoke(
+                                                        null,
+                                                        "jdbc:sqlite::memory:",
+                                                        new Properties())) {
+                                    assertThat(isolated.isValid(0)).isTrue();
+                                }
+                            }
                         } catch (Throwable e) {
                             e.printStackTrace();
                             fail(e.getLocalizedMessage());

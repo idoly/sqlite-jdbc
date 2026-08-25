@@ -10,6 +10,7 @@ import java.util.stream.Stream;
 public final class NativePlatform {
     public static final String X86_64 = "x86_64";
     public static final String AARCH64 = "aarch64";
+    private static final String SQLITE_LIBRARY_BASE_NAME = "sqlite3";
 
     private NativePlatform() {}
 
@@ -25,6 +26,18 @@ public final class NativePlatform {
 
     public static String getNativeLibFolderPathForCurrentOS() {
         return getOSName() + "/" + getArchName();
+    }
+
+    public static String getNativeLibResourcePath() {
+        return "/io/github/idoly/sqlite/native/" + getNativeLibFolderPathForCurrentOS();
+    }
+
+    public static String getNativeLibName() {
+        return System.mapLibraryName(SQLITE_LIBRARY_BASE_NAME);
+    }
+
+    public static boolean hasNativeLib(String path, String libraryName) {
+        return NativePlatform.class.getResource(path + "/" + libraryName) != null;
     }
 
     public static String getOSName() {

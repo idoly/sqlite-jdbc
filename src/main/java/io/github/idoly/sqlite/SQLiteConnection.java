@@ -5,12 +5,12 @@ import io.github.idoly.sqlite.core.SQLiteDatabase;
 import io.github.idoly.sqlite.ffm.FfmDatabase;
 import io.github.idoly.sqlite.internal.DatabaseMetaDataImpl;
 import io.github.idoly.sqlite.internal.PreparedStatementImpl;
-import io.github.idoly.sqlite.internal.SavepointImpl;
 import io.github.idoly.sqlite.internal.StatementImpl;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
@@ -259,8 +259,8 @@ public final class SQLiteConnection implements Connection {
                 URL resourceAddr = contextCL.getResource(resourceName);
                 if (resourceAddr == null) {
                     try {
-                        resourceAddr = new URL(resourceName);
-                    } catch (MalformedURLException e) {
+                        resourceAddr = new URI(resourceName).toURL();
+                    } catch (MalformedURLException | URISyntaxException e) {
                         throw new SQLException(
                                 String.format("resource %s not found: %s", resourceName, e));
                     }
@@ -597,7 +597,6 @@ public final class SQLiteConnection implements Connection {
      * @throws SQLException if a statement has already been executed on this connection, then the
      *     transaction cannot be upgraded to write
      */
-    @SuppressWarnings("deprecation")
     public void tryEnforceTransactionMode() throws SQLException {
         // important note: read-only mode is only supported when auto-commit is disabled
         if (db.getConfig().isExplicitReadOnly()
@@ -654,14 +653,14 @@ public final class SQLiteConnection implements Connection {
     public Map<String, Class<?>> getTypeMap() throws SQLException {
         synchronized (this) {
             if (this.typeMap == null) {
-                this.typeMap = new HashMap<String, Class<?>>();
+                this.typeMap = new HashMap<>();
             }
 
             return this.typeMap;
         }
     }
 
-    public void setTypeMap(Map map) throws SQLException {
+    public void setTypeMap(Map<String, Class<?>> map) throws SQLException {
         synchronized (this) {
             this.typeMap = map;
         }
@@ -754,7 +753,7 @@ public final class SQLiteConnection implements Connection {
 
     public Savepoint setSavepoint() throws SQLException {
         checkSavepointMode();
-        SavepointImpl savepoint = new SavepointImpl(this, savePoint.incrementAndGet());
+        SavepointImpl savepoint = new SavepointImpl(this, savePoint.incrementAndGet(), null);
         db.exec("SAVEPOINT " + quoteIdentifier(savepoint.sqliteName()), false);
         return savepoint;
     }
@@ -804,6 +803,29 @@ public final class SQLiteConnection implements Connection {
         return '"' + identifier.replace("\"", "\"\"") + '"';
     }
 
+    private record SavepointImpl(SQLiteConnection connection, int id, String name)
+            implements Savepoint {
+        @Override
+        public int getSavepointId() throws SQLException {
+            if (name != null) throw new SQLException("named savepoint has no numeric ID");
+            return id;
+        }
+
+        @Override
+        public String getSavepointName() throws SQLException {
+            if (name == null) throw new SQLException("unnamed savepoint has no name");
+            return name;
+        }
+
+        boolean belongsTo(SQLiteConnection candidate) {
+            return connection == candidate;
+        }
+
+        String sqliteName() {
+            return name == null ? "SQLITE_SAVEPOINT_" + id : name;
+        }
+    }
+
     public Struct createStruct(String t, Object[] attr) throws SQLException {
         throw new SQLFeatureNotSupportedException("not implemented by SQLite JDBC driver");
     }
@@ -822,8 +844,6 @@ public final class SQLiteConnection implements Connection {
 
         return new PreparedStatementImpl(this, db, sql);
     }
-
-    // JDBC 4
 
     public <T> T unwrap(Class<T> iface) throws SQLException {
         if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());

@@ -1,12 +1,3 @@
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// BackupRestoreCommandTest.java
-// Since: Mar 12, 2010
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;

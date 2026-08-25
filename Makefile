@@ -99,8 +99,9 @@ CCFLAGS := $($(target)_CCFLAGS)
 LINKFLAGS := $($(target)_LINKFLAGS)
 LIBNAME := $($(target)_LIBNAME)
 SQLITE_FLAGS := $($(target)_SQLITE_FLAGS)
-SQLITE_SRC_PREFIX := sqlite-src-$(shell ./amalgamation_version.sh $(version))
-SQLITE_AMAL_PREFIX := sqlite-amalgamation-$(shell ./amalgamation_version.sh $(version))
+SQLITE_VERSION_CODE := $(shell printf '%s\n' '$(version)' | awk -F. '{ printf "%d%02d%02d%02d\n", $$1, $$2, $$3, $$4 }')
+SQLITE_SRC_PREFIX := sqlite-src-$(SQLITE_VERSION_CODE)
+SQLITE_AMAL_PREFIX := sqlite-amalgamation-$(SQLITE_VERSION_CODE)
 
 RESOURCE_DIR = src/main/resources
 

@@ -1,12 +1,3 @@
-// --------------------------------------
-// sqlite-jdbc Project
-//
-// SQLiteDataSourceTest.java
-// Since: Mar 11, 2010
-//
-// $URL$
-// $Author$
-// --------------------------------------
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;

@@ -5,7 +5,7 @@ import io.github.idoly.sqlite.SQLiteDataSource;
 import java.sql.SQLException;
 import javax.sql.PooledConnection;
 
-public class SQLiteConnectionPoolDataSource extends SQLiteDataSource
+public final class SQLiteConnectionPoolDataSource extends SQLiteDataSource
         implements javax.sql.ConnectionPoolDataSource {
 
     /** Default constructor. */

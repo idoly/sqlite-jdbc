@@ -11,7 +11,7 @@ import java.util.Properties;
 import java.util.TimeZone;
 
 /** Connection local configurations */
-public class SQLiteConnectionConfig {
+public final class SQLiteConnectionConfig {
     private SQLiteConfig.DateClass dateClass = SQLiteConfig.DateClass.INTEGER;
     private SQLiteConfig.DatePrecision datePrecision =
             SQLiteConfig.DatePrecision.MILLISECONDS; // Calendar.SECOND or Calendar.MILLISECOND

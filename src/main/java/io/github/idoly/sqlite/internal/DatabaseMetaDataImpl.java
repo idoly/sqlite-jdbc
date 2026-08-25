@@ -159,13 +159,13 @@ public final class DatabaseMetaDataImpl implements DatabaseMetaData {
                                 row ->
                                         row.stream()
                                                 .map(
-                                                        value -> {
-                                                            if (value == null) return "null";
-                                                            if (value instanceof String) {
-                                                                return "'" + value + "'";
-                                                            }
-                                                            return value.toString();
-                                                        })
+                                                        value ->
+                                                                switch (value) {
+                                                                    case null -> "null";
+                                                                    case String text ->
+                                                                            "'" + text + "'";
+                                                                    default -> value.toString();
+                                                                })
                                                 .collect(Collectors.joining(",", "(", ")")))
                         .collect(Collectors.joining(","));
         return "with cte("
@@ -1940,7 +1940,7 @@ public final class DatabaseMetaDataImpl implements DatabaseMetaData {
             // exception
             if ("sqlite_schema".equals(table) || "sqlite_master".equals(table)) return;
 
-            if (table == null || table.trim().length() == 0) {
+            if (table == null || table.isBlank()) {
                 throw new SQLException("Invalid table name: '" + this.table + "'");
             }
 
@@ -2011,7 +2011,7 @@ public final class DatabaseMetaDataImpl implements DatabaseMetaData {
 
         public ImportedKeyFinder(String table) throws SQLException {
 
-            if (table == null || table.trim().length() == 0) {
+            if (table == null || table.isBlank()) {
                 throw new SQLException("Invalid table name: '" + table + "'");
             }
 
@@ -2193,7 +2193,6 @@ public final class DatabaseMetaDataImpl implements DatabaseMetaData {
         return name;
     }
 
-    // JDBC 4
     public <T> T unwrap(Class<T> iface) throws SQLException {
         if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());
         return iface.cast(this);

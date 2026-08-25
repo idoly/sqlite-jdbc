@@ -1,17 +1,18 @@
 package io.github.idoly.sqlite.internal;
 
+import static io.github.idoly.sqlite.core.SQLiteResultCodes.*;
+
 import io.github.idoly.sqlite.SQLiteConnectionConfig;
 import io.github.idoly.sqlite.core.SQLiteDatabase;
-import io.github.idoly.sqlite.core.SQLiteResultCodes;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.io.StringReader;
-import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -40,7 +41,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class ResultSetImpl implements ResultSet, ResultSetMetaData, SQLiteResultCodes {
+public final class ResultSetImpl implements ResultSet, ResultSetMetaData {
     protected final StatementImpl stmt;
 
     /** If the result set does not have any rows. */
@@ -82,8 +83,6 @@ public final class ResultSetImpl implements ResultSet, ResultSetMetaData, SQLite
     public ResultSetImpl(StatementImpl stmt) {
         this.stmt = stmt;
     }
-
-    // INTERNAL FUNCTIONS ///////////////////////////////////////////
 
     protected SQLiteDatabase getDatabase() {
         return stmt.getDatabase();
@@ -183,7 +182,7 @@ public final class ResultSetImpl implements ResultSet, ResultSetMetaData, SQLite
 
     protected int addColumnIndexInCache(String col, int index) {
         if (columnNameToIndex == null) {
-            columnNameToIndex = new HashMap<String, Integer>(cols.length);
+            columnNameToIndex = new HashMap<>(cols.length);
         }
         columnNameToIndex.put(col, index);
         return index;
@@ -609,12 +608,12 @@ public final class ResultSetImpl implements ResultSet, ResultSetMetaData, SQLite
             case SQLITE_INTEGER:
                 long val = getLong(col);
                 if (val > Integer.MAX_VALUE || val < Integer.MIN_VALUE) {
-                    return new Long(val);
+                    return Long.valueOf(val);
                 } else {
-                    return new Integer((int) val);
+                    return Integer.valueOf((int) val);
                 }
             case SQLITE_FLOAT:
-                return new Double(getDouble(col));
+                return Double.valueOf(getDouble(col));
             case SQLITE_BLOB:
                 return getBytes(col);
             case SQLITE_NULL:
@@ -1060,16 +1059,11 @@ public final class ResultSetImpl implements ResultSet, ResultSetMetaData, SQLite
         final boolean wasOpen = isOpen(); // prevent close() recursion
         closeInternal();
         // close-on-completion regardless of closeStmt
-        if (wasOpen && stmt instanceof StatementImpl) {
-            StatementImpl stat = (StatementImpl) stmt;
-            // check if its not closed already in which case no-op
-            if (stat.closeOnCompletion && !stat.isClosed()) {
-                stat.close();
-            }
+        if (wasOpen && stmt.closeOnCompletion && !stmt.isClosed()) {
+            stmt.close();
         }
     }
 
-    // JDBC 4
     public <T> T unwrap(Class<T> iface) throws SQLException {
         if (!isWrapperFor(iface)) throw new SQLException("not a wrapper for " + iface.getName());
         return iface.cast(this);
@@ -1383,13 +1377,7 @@ public final class ResultSetImpl implements ResultSet, ResultSetMetaData, SQLite
         if (data == null) {
             return null;
         }
-        InputStream inputStream;
-        try {
-            inputStream = new ByteArrayInputStream(data.getBytes("ASCII"));
-        } catch (UnsupportedEncodingException e) {
-            return null;
-        }
-        return inputStream;
+        return new ByteArrayInputStream(data.getBytes(StandardCharsets.US_ASCII));
     }
 
     @Deprecated
@@ -1420,13 +1408,11 @@ public final class ResultSetImpl implements ResultSet, ResultSetMetaData, SQLite
         return clob == null ? null : new SqliteClob(clob);
     }
 
-    @SuppressWarnings("rawtypes")
-    public Object getObject(int col, Map map) throws SQLException {
+    public Object getObject(int col, Map<String, Class<?>> map) throws SQLException {
         throw unsupported();
     }
 
-    @SuppressWarnings("rawtypes")
-    public Object getObject(String col, Map map) throws SQLException {
+    public Object getObject(String col, Map<String, Class<?>> map) throws SQLException {
         throw unsupported();
     }
 

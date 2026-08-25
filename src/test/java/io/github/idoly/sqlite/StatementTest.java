@@ -81,8 +81,7 @@ public class StatementTest {
         assertThat(rs.next()).isTrue();
         assertThat(rs.getInt(1)).isEqualTo(Integer.MAX_VALUE);
         assertThat(rs.getString(1)).isEqualTo(Integer.toString(Integer.MAX_VALUE));
-        assertThat(0.001)
-                .isCloseTo(new Integer(Integer.MAX_VALUE).doubleValue(), offset(rs.getDouble(1)));
+        assertThat(rs.getDouble(1)).isCloseTo((double) Integer.MAX_VALUE, offset(0.001));
         assertThat(rs.next()).isFalse();
         rs.close();
     }

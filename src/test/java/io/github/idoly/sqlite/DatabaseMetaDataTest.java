@@ -1661,25 +1661,6 @@ public class DatabaseMetaDataTest {
     }
 
     @Test
-    public void columnOrderOfgetCrossReference() throws SQLException {
-        stat.executeUpdate("create table person (id integer)");
-        stat.executeUpdate(
-                "create table address (pid integer, name, foreign key(pid) references person(id))");
-
-        ResultSet cr = meta.getCrossReference(null, null, "person", null, null, "address");
-        // assertTrue(cr.next());
-        // TODO: unfinished business
-    }
-
-    /* TODO
-
-    @Test public void columnOrderOfgetTypeInfo() throws SQLException {
-    @Test public void columnOrderOfgetIndexInfo() throws SQLException {
-    @Test public void columnOrderOfgetSuperTypes() throws SQLException {
-    @Test public void columnOrderOfgetSuperTables() throws SQLException {
-    @Test public void columnOrderOfgetAttributes() throws SQLException {*/
-
-    @Test
     public void columnOrderOfgetUDTs() throws SQLException {
         ResultSet rs = meta.getUDTs(null, null, null, null);
         assertThat(rs.next()).isFalse();

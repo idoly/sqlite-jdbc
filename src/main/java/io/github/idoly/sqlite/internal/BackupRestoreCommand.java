@@ -81,7 +81,7 @@ final class BackupRestoreCommand {
                 if (matcher.matches()) {
                     String dbName = removeQuotation(matcher.group(2));
                     String dest = removeQuotation(matcher.group(3));
-                    if (dbName == null || dbName.length() == 0) dbName = "main";
+                    if (dbName == null || dbName.isEmpty()) dbName = "main";
 
                     return new BackupCommand(dbName, dest);
                 }
@@ -129,7 +129,7 @@ final class BackupRestoreCommand {
                 if (matcher.matches()) {
                     String dbName = removeQuotation(matcher.group(2));
                     String dest = removeQuotation(matcher.group(3));
-                    if (dbName == null || dbName.length() == 0) dbName = "main";
+                    if (dbName == null || dbName.isEmpty()) dbName = "main";
                     return new RestoreCommand(dbName, dest);
                 }
             }

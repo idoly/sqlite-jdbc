@@ -18,7 +18,7 @@ import java.util.TreeSet;
  *
  * @author leo
  */
-public class SQLiteConfig {
+public final class SQLiteConfig {
     /* Date storage class*/
     public static final String DEFAULT_DATE_STRING_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
     /* Default limits used by SQLite: https://www.sqlite.org/limits.html */
@@ -93,13 +93,12 @@ public class SQLiteConfig {
      */
     public void apply(Connection conn) throws SQLException {
 
-        HashSet<String> pragmaParams = new HashSet<String>();
+        HashSet<String> pragmaParams = new HashSet<>();
         for (Pragma each : Pragma.values()) {
             pragmaParams.add(each.pragmaName);
         }
 
-        if (conn instanceof SQLiteConnection) {
-            SQLiteConnection sqliteConn = (SQLiteConnection) conn;
+        if (conn instanceof SQLiteConnection sqliteConn) {
             sqliteConn.setLimit(
                     SQLiteLimits.SQLITE_LIMIT_ATTACHED,
                     parseLimitPragma(Pragma.LIMIT_ATTACHED, DEFAULT_MAX_ATTACHED));
@@ -337,7 +336,7 @@ public class SQLiteConfig {
         private static final String[] Values = new String[] {"true", "false"};
     }
 
-    static final Set<String> pragmaSet = new TreeSet<String>();
+    static final Set<String> pragmaSet = new TreeSet<>();
 
     static {
         for (SQLiteConfig.Pragma pragma : SQLiteConfig.Pragma.values()) {

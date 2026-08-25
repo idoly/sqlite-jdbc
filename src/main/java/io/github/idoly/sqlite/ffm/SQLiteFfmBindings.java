@@ -1357,8 +1357,8 @@ final class SQLiteFfmBindings {
     }
 
     private static Path extractPackagedLibrary() {
-        String libraryName = NativeLibraryResource.getNativeLibName();
-        String resource = NativeLibraryResource.getNativeLibResourcePath() + "/" + libraryName;
+        String libraryName = NativePlatform.getNativeLibName();
+        String resource = NativePlatform.getNativeLibResourcePath() + "/" + libraryName;
         byte[] libraryBytes = readPackagedLibrary(resource);
         try {
             Path directory = Files.createTempDirectory("sqlite-jdbc-ffm-");
