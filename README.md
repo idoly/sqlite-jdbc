@@ -22,11 +22,9 @@ JAR 只加载当前平台的内置 SQLite 动态库，不搜索或回退到系�
 <dependency>
     <groupId>io.github.idoly</groupId>
     <artifactId>sqlite-jdbc</artifactId>
-    <version>3.53.4.0-SNAPSHOT</version>
+    <version>3.53.4.0</version>
 </dependency>
 ```
-
-当前版本是 SNAPSHOT。从源码使用时，先执行 `mvn clean install`。
 
 应用启动时必须允许驱动访问 native API：
 
