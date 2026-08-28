@@ -1,11 +1,13 @@
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assumptions.assumeThat;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +71,13 @@ public class ExtensionTest {
                         "select rowid, name, ingredients from recipe where recipe match 'onions'");
         assertThat(rs.next()).isTrue();
         assertThat(rs.getString(2)).isEqualTo("pumpkin stew");
+    }
+
+    @Test
+    public void legacyFunctionsAreNotRegistered() {
+        assertThatThrownBy(() -> stat.executeQuery("select reverse('abc')"))
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("no such function: reverse");
     }
 
     @Test

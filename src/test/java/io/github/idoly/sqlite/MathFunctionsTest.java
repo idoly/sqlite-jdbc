@@ -54,7 +54,8 @@ public class MathFunctionsTest {
     public void officialFunctionsAreCompileOptions() throws Exception {
         try (var connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
             assertThat(TestSupport.getCompileOptions(connection))
-                    .contains("ENABLE_MATH_FUNCTIONS", "ENABLE_PERCENTILE");
+                    .contains("ENABLE_MATH_FUNCTIONS", "ENABLE_PERCENTILE")
+                    .doesNotContain("JDBC_EXTENSIONS");
         }
     }
 }

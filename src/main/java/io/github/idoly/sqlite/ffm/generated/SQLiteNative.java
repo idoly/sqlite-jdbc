@@ -18,7 +18,6 @@ public class SQLiteNative extends SQLiteNative$shared {
         // Should not be called directly
     }
 
-    static final Arena LIBRARY_ARENA = Arena.ofAuto();
 
     static final SymbolLookup SYMBOL_LOOKUP = SymbolLookup.loaderLookup()
             .or(Linker.nativeLinker().defaultLookup());
