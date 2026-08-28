@@ -3,8 +3,6 @@
 [![CI](https://github.com/idoly/sqlite-jdbc/actions/workflows/ci.yml/badge.svg)](https://github.com/idoly/sqlite-jdbc/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.idoly/sqlite-jdbc.svg)](https://central.sonatype.com/artifact/io.github.idoly/sqlite-jdbc)
 
-直接调用 SQLite C ABI，不使用 JNI，运行时无第三方依赖。
-
 ## 使用
 
 ```xml
