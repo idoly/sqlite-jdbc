@@ -5,20 +5,6 @@
 
 基于 JDK Foreign Function & Memory API 的 SQLite JDBC 驱动。直接调用 SQLite C ABI，不使用 JNI，运行时无第三方依赖。
 
-## 环境
-
-| 项目 | 支持范围 |
-| --- | --- |
-| Java | JDK 25+ |
-| JDBC | JDK 25：4.3；JDK 26+：4.5 |
-| SQLite | 3.53.4 |
-| Linux | glibc 2.28+、`x86_64` |
-| macOS | 11+、`x86_64`、`aarch64` |
-| Windows | `x86_64`、`aarch64` |
-| JPMS | `io.github.idoly.sqlite` |
-
-Linux musl、32 位系统和其他平台不受支持。
-
 ## 使用
 
 ```xml
