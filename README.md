@@ -98,3 +98,5 @@ mvn spotless:check clean package
 ```shell
 make native
 ```
+
+FFM C ABI 由 jextract 25 生成并提交源码；更新 binding 时执行 `make generate-bindings JEXTRACT=/path/to/jextract`。

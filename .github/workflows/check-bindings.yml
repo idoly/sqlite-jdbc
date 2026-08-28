@@ -1,0 +1,50 @@
+name: Check FFM Bindings
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/check-bindings.yml'
+      - 'Makefile'
+      - 'VERSION'
+      - 'src/main/jextract/**'
+      - 'src/main/java/io/github/idoly/sqlite/ffm/generated/**'
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Install jextract
+        shell: bash
+        env:
+          JEXTRACT_SHA256: d0cc481abc1adb16fb9514e1c5e0bfc08d38c29228bece667fb5054ceaffaa42
+        run: |
+          archive="$RUNNER_TEMP/jextract.tar.gz"
+          directory="$RUNNER_TEMP/jextract"
+          curl --fail --location --retry 5 \
+            --output "$archive" \
+            https://download.java.net/java/early_access/jextract/25/2/openjdk-25-jextract+2-4_linux-x64_bin.tar.gz
+          echo "$JEXTRACT_SHA256  $archive" | sha256sum --check
+          mkdir "$directory"
+          tar -xzf "$archive" -C "$directory" --strip-components=1
+          echo "JEXTRACT=$directory/bin/jextract" >> "$GITHUB_ENV"
+
+      - name: Regenerate bindings
+        shell: bash
+        run: |
+          sort --check --unique src/main/jextract/sqlite3.functions
+          make generate-bindings JEXTRACT="$JEXTRACT"
+
+      - name: Verify committed output
+        shell: bash
+        run: git diff --exit-code -- src/main/java/io/github/idoly/sqlite/ffm/generated

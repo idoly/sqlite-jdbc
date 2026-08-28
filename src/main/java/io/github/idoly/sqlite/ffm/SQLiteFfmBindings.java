@@ -2,7 +2,6 @@ package io.github.idoly.sqlite.ffm;
 
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
-import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
@@ -12,13 +11,13 @@ import io.github.idoly.sqlite.SQLiteFunction;
 import io.github.idoly.sqlite.SQLiteProgressHandler;
 import io.github.idoly.sqlite.core.SQLiteDatabase;
 import io.github.idoly.sqlite.core.SQLiteResultCodes;
+import io.github.idoly.sqlite.ffm.generated.SQLiteNative;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -28,7 +27,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Direct JDK FFM binding to SQLite's public C ABI. */
@@ -42,205 +40,94 @@ final class SQLiteFfmBindings {
     private static final int SQLITE_DESERIALIZE_FREEONCLOSE = 0x00000001;
     private static final int SQLITE_DESERIALIZE_RESIZEABLE = 0x00000002;
     private static final MemorySegment SQLITE_TRANSIENT = MemorySegment.ofAddress(-1);
-    private static final Arena LIBRARY_ARENA = Arena.global();
     private static final Linker LINKER = Linker.nativeLinker();
-    private static final SymbolLookup SYMBOLS = loadSymbols();
 
-    private static final MethodHandle OPEN =
-            downcall(
-                    "sqlite3_open_v2",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, ADDRESS));
-    private static final MethodHandle CLOSE =
-            downcall("sqlite3_close_v2", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle EXEC =
-            downcall(
-                    "sqlite3_exec",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS));
+    static {
+        loadPackagedLibrary();
+    }
+
+    private static final MethodHandle OPEN = SQLiteNative.sqlite3_open_v2$handle();
+    private static final MethodHandle CLOSE = SQLiteNative.sqlite3_close_v2$handle();
+    private static final MethodHandle EXEC = SQLiteNative.sqlite3_exec$handle();
     private static final MethodHandle ENABLE_SHARED_CACHE =
-            downcall("sqlite3_enable_shared_cache", FunctionDescriptor.of(JAVA_INT, JAVA_INT));
+            SQLiteNative.sqlite3_enable_shared_cache$handle();
     private static final MethodHandle ENABLE_LOAD_EXTENSION =
-            downcall(
-                    "sqlite3_enable_load_extension",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
-    private static final MethodHandle INTERRUPT =
-            downcall("sqlite3_interrupt", FunctionDescriptor.ofVoid(ADDRESS));
-    private static final MethodHandle BUSY_TIMEOUT =
-            downcall("sqlite3_busy_timeout", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
-    private static final MethodHandle PREPARE =
-            downcall(
-                    "sqlite3_prepare_v2",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
-    private static final MethodHandle ERROR_MESSAGE =
-            downcall("sqlite3_errmsg", FunctionDescriptor.of(ADDRESS, ADDRESS));
-    private static final MethodHandle LIBRARY_VERSION =
-            downcall("sqlite3_libversion", FunctionDescriptor.of(ADDRESS));
-    private static final MethodHandle CHANGES =
-            downcall("sqlite3_changes64", FunctionDescriptor.of(JAVA_LONG, ADDRESS));
-    private static final MethodHandle TOTAL_CHANGES =
-            downcall("sqlite3_total_changes64", FunctionDescriptor.of(JAVA_LONG, ADDRESS));
-    private static final MethodHandle FINALIZE =
-            downcall("sqlite3_finalize", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle STEP =
-            downcall("sqlite3_step", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle RESET =
-            downcall("sqlite3_reset", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle CLEAR_BINDINGS =
-            downcall("sqlite3_clear_bindings", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+            SQLiteNative.sqlite3_enable_load_extension$handle();
+    private static final MethodHandle INTERRUPT = SQLiteNative.sqlite3_interrupt$handle();
+    private static final MethodHandle BUSY_TIMEOUT = SQLiteNative.sqlite3_busy_timeout$handle();
+    private static final MethodHandle PREPARE = SQLiteNative.sqlite3_prepare_v2$handle();
+    private static final MethodHandle ERROR_MESSAGE = SQLiteNative.sqlite3_errmsg$handle();
+    private static final MethodHandle LIBRARY_VERSION = SQLiteNative.sqlite3_libversion$handle();
+    private static final MethodHandle CHANGES = SQLiteNative.sqlite3_changes64$handle();
+    private static final MethodHandle TOTAL_CHANGES = SQLiteNative.sqlite3_total_changes64$handle();
+    private static final MethodHandle FINALIZE = SQLiteNative.sqlite3_finalize$handle();
+    private static final MethodHandle STEP = SQLiteNative.sqlite3_step$handle();
+    private static final MethodHandle RESET = SQLiteNative.sqlite3_reset$handle();
+    private static final MethodHandle CLEAR_BINDINGS = SQLiteNative.sqlite3_clear_bindings$handle();
     private static final MethodHandle BIND_PARAMETER_COUNT =
-            downcall("sqlite3_bind_parameter_count", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle COLUMN_COUNT =
-            downcall("sqlite3_column_count", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle COLUMN_TYPE =
-            downcall("sqlite3_column_type", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
+            SQLiteNative.sqlite3_bind_parameter_count$handle();
+    private static final MethodHandle COLUMN_COUNT = SQLiteNative.sqlite3_column_count$handle();
+    private static final MethodHandle COLUMN_TYPE = SQLiteNative.sqlite3_column_type$handle();
     private static final MethodHandle COLUMN_DECLTYPE =
-            downcall("sqlite3_column_decltype", FunctionDescriptor.of(ADDRESS, ADDRESS, JAVA_INT));
-    private static final Optional<MethodHandle> COLUMN_TABLE_NAME =
-            optionalDowncall(
-                    "sqlite3_column_table_name", FunctionDescriptor.of(ADDRESS, ADDRESS, JAVA_INT));
-    private static final MethodHandle COLUMN_NAME =
-            downcall("sqlite3_column_name", FunctionDescriptor.of(ADDRESS, ADDRESS, JAVA_INT));
-    private static final MethodHandle COLUMN_TEXT =
-            downcall("sqlite3_column_text", FunctionDescriptor.of(ADDRESS, ADDRESS, JAVA_INT));
-    private static final MethodHandle COLUMN_BLOB =
-            downcall("sqlite3_column_blob", FunctionDescriptor.of(ADDRESS, ADDRESS, JAVA_INT));
-    private static final MethodHandle COLUMN_BYTES =
-            downcall("sqlite3_column_bytes", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
-    private static final MethodHandle COLUMN_DOUBLE =
-            downcall(
-                    "sqlite3_column_double", FunctionDescriptor.of(JAVA_DOUBLE, ADDRESS, JAVA_INT));
-    private static final MethodHandle COLUMN_LONG =
-            downcall("sqlite3_column_int64", FunctionDescriptor.of(JAVA_LONG, ADDRESS, JAVA_INT));
-    private static final MethodHandle COLUMN_INT =
-            downcall("sqlite3_column_int", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
-    private static final MethodHandle BIND_NULL =
-            downcall("sqlite3_bind_null", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
-    private static final MethodHandle BIND_INT =
-            downcall(
-                    "sqlite3_bind_int",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, JAVA_INT));
-    private static final MethodHandle BIND_LONG =
-            downcall(
-                    "sqlite3_bind_int64",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, JAVA_LONG));
-    private static final MethodHandle BIND_DOUBLE =
-            downcall(
-                    "sqlite3_bind_double",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, JAVA_DOUBLE));
-    private static final MethodHandle BIND_TEXT =
-            downcall(
-                    "sqlite3_bind_text",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS));
-    private static final MethodHandle BIND_BLOB =
-            downcall(
-                    "sqlite3_bind_blob",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS));
-    private static final MethodHandle LIMIT =
-            downcall("sqlite3_limit", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, JAVA_INT));
-    private static final MethodHandle ERROR_CODE =
-            downcall("sqlite3_errcode", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle BACKUP_INIT =
-            downcall(
-                    "sqlite3_backup_init",
-                    FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS));
-    private static final MethodHandle BACKUP_STEP =
-            downcall("sqlite3_backup_step", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
-    private static final MethodHandle BACKUP_FINISH =
-            downcall("sqlite3_backup_finish", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+            SQLiteNative.sqlite3_column_decltype$handle();
+    private static final MethodHandle COLUMN_TABLE_NAME =
+            SQLiteNative.sqlite3_column_table_name$handle();
+    private static final MethodHandle COLUMN_NAME = SQLiteNative.sqlite3_column_name$handle();
+    private static final MethodHandle COLUMN_TEXT = SQLiteNative.sqlite3_column_text$handle();
+    private static final MethodHandle COLUMN_BLOB = SQLiteNative.sqlite3_column_blob$handle();
+    private static final MethodHandle COLUMN_BYTES = SQLiteNative.sqlite3_column_bytes$handle();
+    private static final MethodHandle COLUMN_DOUBLE = SQLiteNative.sqlite3_column_double$handle();
+    private static final MethodHandle COLUMN_LONG = SQLiteNative.sqlite3_column_int64$handle();
+    private static final MethodHandle COLUMN_INT = SQLiteNative.sqlite3_column_int$handle();
+    private static final MethodHandle BIND_NULL = SQLiteNative.sqlite3_bind_null$handle();
+    private static final MethodHandle BIND_INT = SQLiteNative.sqlite3_bind_int$handle();
+    private static final MethodHandle BIND_LONG = SQLiteNative.sqlite3_bind_int64$handle();
+    private static final MethodHandle BIND_DOUBLE = SQLiteNative.sqlite3_bind_double$handle();
+    private static final MethodHandle BIND_TEXT = SQLiteNative.sqlite3_bind_text$handle();
+    private static final MethodHandle BIND_BLOB = SQLiteNative.sqlite3_bind_blob$handle();
+    private static final MethodHandle LIMIT = SQLiteNative.sqlite3_limit$handle();
+    private static final MethodHandle ERROR_CODE = SQLiteNative.sqlite3_errcode$handle();
+    private static final MethodHandle BACKUP_INIT = SQLiteNative.sqlite3_backup_init$handle();
+    private static final MethodHandle BACKUP_STEP = SQLiteNative.sqlite3_backup_step$handle();
+    private static final MethodHandle BACKUP_FINISH = SQLiteNative.sqlite3_backup_finish$handle();
     private static final MethodHandle BACKUP_REMAINING =
-            downcall("sqlite3_backup_remaining", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+            SQLiteNative.sqlite3_backup_remaining$handle();
     private static final MethodHandle BACKUP_PAGE_COUNT =
-            downcall("sqlite3_backup_pagecount", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle SERIALIZE =
-            downcall(
-                    "sqlite3_serialize",
-                    FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS, JAVA_INT));
-    private static final MethodHandle DESERIALIZE =
-            downcall(
-                    "sqlite3_deserialize",
-                    FunctionDescriptor.of(
-                            JAVA_INT, ADDRESS, ADDRESS, ADDRESS, JAVA_LONG, JAVA_LONG, JAVA_INT));
-    private static final MethodHandle MALLOC =
-            downcall("sqlite3_malloc64", FunctionDescriptor.of(ADDRESS, JAVA_LONG));
-    private static final MethodHandle FREE =
-            downcall("sqlite3_free", FunctionDescriptor.ofVoid(ADDRESS));
+            SQLiteNative.sqlite3_backup_pagecount$handle();
+    private static final MethodHandle SERIALIZE = SQLiteNative.sqlite3_serialize$handle();
+    private static final MethodHandle DESERIALIZE = SQLiteNative.sqlite3_deserialize$handle();
+    private static final MethodHandle MALLOC = SQLiteNative.sqlite3_malloc64$handle();
+    private static final MethodHandle FREE = SQLiteNative.sqlite3_free$handle();
     private static final MethodHandle TABLE_COLUMN_METADATA =
-            downcall(
-                    "sqlite3_table_column_metadata",
-                    FunctionDescriptor.of(
-                            JAVA_INT, ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS, ADDRESS,
-                            ADDRESS, ADDRESS));
-    private static final MethodHandle BUSY_HANDLER =
-            downcall(
-                    "sqlite3_busy_handler",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
+            SQLiteNative.sqlite3_table_column_metadata$handle();
+    private static final MethodHandle BUSY_HANDLER = SQLiteNative.sqlite3_busy_handler$handle();
     private static final MethodHandle PROGRESS_HANDLER =
-            downcall(
-                    "sqlite3_progress_handler",
-                    FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
+            SQLiteNative.sqlite3_progress_handler$handle();
     private static final MethodHandle CREATE_COLLATION =
-            downcall(
-                    "sqlite3_create_collation_v2",
-                    FunctionDescriptor.of(
-                            JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
-    private static final MethodHandle UPDATE_HOOK =
-            downcall(
-                    "sqlite3_update_hook",
-                    FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS));
-    private static final MethodHandle COMMIT_HOOK =
-            downcall(
-                    "sqlite3_commit_hook",
-                    FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS));
-    private static final MethodHandle ROLLBACK_HOOK =
-            downcall(
-                    "sqlite3_rollback_hook",
-                    FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS));
+            SQLiteNative.sqlite3_create_collation_v2$handle();
+    private static final MethodHandle UPDATE_HOOK = SQLiteNative.sqlite3_update_hook$handle();
+    private static final MethodHandle COMMIT_HOOK = SQLiteNative.sqlite3_commit_hook$handle();
+    private static final MethodHandle ROLLBACK_HOOK = SQLiteNative.sqlite3_rollback_hook$handle();
     private static final MethodHandle CREATE_FUNCTION =
-            downcall(
-                    "sqlite3_create_function_v2",
-                    FunctionDescriptor.of(
-                            JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS,
-                            ADDRESS, ADDRESS, ADDRESS));
+            SQLiteNative.sqlite3_create_function_v2$handle();
     private static final MethodHandle CREATE_WINDOW_FUNCTION =
-            downcall(
-                    "sqlite3_create_window_function",
-                    FunctionDescriptor.of(
-                            JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS,
-                            ADDRESS, ADDRESS, ADDRESS, ADDRESS));
+            SQLiteNative.sqlite3_create_window_function$handle();
     private static final MethodHandle AGGREGATE_CONTEXT =
-            downcall(
-                    "sqlite3_aggregate_context", FunctionDescriptor.of(ADDRESS, ADDRESS, JAVA_INT));
-    private static final MethodHandle RESULT_NULL =
-            downcall("sqlite3_result_null", FunctionDescriptor.ofVoid(ADDRESS));
-    private static final MethodHandle RESULT_TEXT =
-            downcall(
-                    "sqlite3_result_text",
-                    FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT, ADDRESS));
-    private static final MethodHandle RESULT_BLOB =
-            downcall(
-                    "sqlite3_result_blob",
-                    FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT, ADDRESS));
-    private static final MethodHandle RESULT_DOUBLE =
-            downcall("sqlite3_result_double", FunctionDescriptor.ofVoid(ADDRESS, JAVA_DOUBLE));
-    private static final MethodHandle RESULT_LONG =
-            downcall("sqlite3_result_int64", FunctionDescriptor.ofVoid(ADDRESS, JAVA_LONG));
-    private static final MethodHandle RESULT_INT =
-            downcall("sqlite3_result_int", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
-    private static final MethodHandle RESULT_ERROR =
-            downcall("sqlite3_result_error", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT));
-    private static final MethodHandle VALUE_TEXT =
-            downcall("sqlite3_value_text", FunctionDescriptor.of(ADDRESS, ADDRESS));
-    private static final MethodHandle VALUE_BLOB =
-            downcall("sqlite3_value_blob", FunctionDescriptor.of(ADDRESS, ADDRESS));
-    private static final MethodHandle VALUE_BYTES =
-            downcall("sqlite3_value_bytes", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle VALUE_DOUBLE =
-            downcall("sqlite3_value_double", FunctionDescriptor.of(JAVA_DOUBLE, ADDRESS));
-    private static final MethodHandle VALUE_LONG =
-            downcall("sqlite3_value_int64", FunctionDescriptor.of(JAVA_LONG, ADDRESS));
-    private static final MethodHandle VALUE_INT =
-            downcall("sqlite3_value_int", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-    private static final MethodHandle VALUE_TYPE =
-            downcall("sqlite3_value_type", FunctionDescriptor.of(JAVA_INT, ADDRESS));
+            SQLiteNative.sqlite3_aggregate_context$handle();
+    private static final MethodHandle RESULT_NULL = SQLiteNative.sqlite3_result_null$handle();
+    private static final MethodHandle RESULT_TEXT = SQLiteNative.sqlite3_result_text$handle();
+    private static final MethodHandle RESULT_BLOB = SQLiteNative.sqlite3_result_blob$handle();
+    private static final MethodHandle RESULT_DOUBLE = SQLiteNative.sqlite3_result_double$handle();
+    private static final MethodHandle RESULT_LONG = SQLiteNative.sqlite3_result_int64$handle();
+    private static final MethodHandle RESULT_INT = SQLiteNative.sqlite3_result_int$handle();
+    private static final MethodHandle RESULT_ERROR = SQLiteNative.sqlite3_result_error$handle();
+    private static final MethodHandle VALUE_TEXT = SQLiteNative.sqlite3_value_text$handle();
+    private static final MethodHandle VALUE_BLOB = SQLiteNative.sqlite3_value_blob$handle();
+    private static final MethodHandle VALUE_BYTES = SQLiteNative.sqlite3_value_bytes$handle();
+    private static final MethodHandle VALUE_DOUBLE = SQLiteNative.sqlite3_value_double$handle();
+    private static final MethodHandle VALUE_LONG = SQLiteNative.sqlite3_value_int64$handle();
+    private static final MethodHandle VALUE_INT = SQLiteNative.sqlite3_value_int$handle();
+    private static final MethodHandle VALUE_TYPE = SQLiteNative.sqlite3_value_type$handle();
     private static final MethodHandle BUSY_CALLBACK =
             callbackHandle(
                     "busyCallback",
@@ -319,9 +206,7 @@ final class SQLiteFfmBindings {
                             int.class,
                             MemorySegment.class));
     private static final MethodHandle EXTENDED_RESULT_CODES =
-            downcall(
-                    "sqlite3_extended_result_codes",
-                    FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
+            SQLiteNative.sqlite3_extended_result_codes$handle();
 
     private SQLiteFfmBindings() {}
 
@@ -497,8 +382,7 @@ final class SQLiteFfmBindings {
     }
 
     static ByteBuffer columnTableName(long statement, int column) throws SQLException {
-        if (COLUMN_TABLE_NAME.isEmpty()) return null;
-        return pointerString(COLUMN_TABLE_NAME.get(), statement, column, "read column table name");
+        return pointerString(COLUMN_TABLE_NAME, statement, column, "read column table name");
     }
 
     static ByteBuffer columnName(long statement, int column) throws SQLException {
@@ -1352,8 +1236,8 @@ final class SQLiteFfmBindings {
         }
     }
 
-    private static SymbolLookup loadSymbols() {
-        return SymbolLookup.libraryLookup(extractPackagedLibrary(), LIBRARY_ARENA);
+    private static void loadPackagedLibrary() {
+        System.load(extractPackagedLibrary().toString());
     }
 
     private static Path extractPackagedLibrary() {
@@ -1394,15 +1278,6 @@ final class SQLiteFfmBindings {
         }
         throw new IllegalStateException(
                 "Could not read packaged SQLite library " + resource, failure);
-    }
-
-    private static MethodHandle downcall(String symbol, FunctionDescriptor descriptor) {
-        return LINKER.downcallHandle(SYMBOLS.findOrThrow(symbol), descriptor);
-    }
-
-    private static Optional<MethodHandle> optionalDowncall(
-            String symbol, FunctionDescriptor descriptor) {
-        return SYMBOLS.find(symbol).map(address -> LINKER.downcallHandle(address, descriptor));
     }
 
     private static MemorySegment cString(Arena arena, byte[] value) {

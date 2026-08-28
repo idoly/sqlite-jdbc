@@ -90,6 +90,9 @@
                 <version>3.10.0</version>
                 <configuration>
                     <java>
+                        <excludes>
+                            <exclude>src/main/java/io/github/idoly/sqlite/ffm/generated/**/*.java</exclude>
+                        </excludes>
                         <googleJavaFormat>
                             <version>1.30.0</version>
                             <style>AOSP</style>
