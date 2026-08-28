@@ -396,9 +396,24 @@ public final class SQLiteConnection implements Connection {
     @Override
     public void close() throws SQLException {
         if (isClosed()) return;
-        if (meta != null) meta.close();
 
-        db.close();
+        SQLException failure = null;
+        DatabaseMetaDataImpl metadata = meta;
+        meta = null;
+        if (metadata != null) {
+            try {
+                metadata.close();
+            } catch (SQLException error) {
+                failure = error;
+            }
+        }
+        try {
+            db.close();
+        } catch (SQLException error) {
+            if (failure == null) failure = error;
+            else failure.addSuppressed(error);
+        }
+        if (failure != null) throw failure;
     }
 
     /** Whether an SQLite library interface to the database has been established. */

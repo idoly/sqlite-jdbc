@@ -150,8 +150,6 @@ public final class SQLiteConfig {
         pragmaParams.remove(Pragma.DATE_PRECISION.pragmaName());
         pragmaParams.remove(Pragma.DATE_CLASS.pragmaName());
         pragmaParams.remove(Pragma.DATE_STRING_FORMAT.pragmaName());
-        pragmaParams.remove(Pragma.PASSWORD.pragmaName());
-        pragmaParams.remove(Pragma.HEXKEY_MODE.pragmaName());
         pragmaParams.remove(Pragma.LIMIT_ATTACHED.pragmaName());
         pragmaParams.remove(Pragma.LIMIT_COLUMN.pragmaName());
         pragmaParams.remove(Pragma.LIMIT_COMPOUND_SELECT.pragmaName());
@@ -170,25 +168,7 @@ public final class SQLiteConfig {
         pragmaParams.remove(Pragma.JDBC_EXPLICIT_READONLY.pragmaName());
         pragmaParams.remove(Pragma.JDBC_GET_GENERATED_KEYS.pragmaName());
 
-        Statement stat = conn.createStatement();
-        try {
-            if (pragmaTable.containsKey(Pragma.PASSWORD.pragmaName())) {
-                String password = pragmaTable.getProperty(Pragma.PASSWORD.pragmaName());
-                if (password != null && !password.isEmpty()) {
-                    String hexkeyMode = pragmaTable.getProperty(Pragma.HEXKEY_MODE.pragmaName());
-                    String passwordPragma;
-                    if (HexKeyMode.SSE.name().equalsIgnoreCase(hexkeyMode)) {
-                        passwordPragma = "pragma hexkey = '%s'";
-                    } else if (HexKeyMode.SQLCIPHER.name().equalsIgnoreCase(hexkeyMode)) {
-                        passwordPragma = "pragma key = \"x'%s'\"";
-                    } else {
-                        passwordPragma = "pragma key = '%s'";
-                    }
-                    stat.execute(String.format(passwordPragma, password.replace("'", "''")));
-                    stat.execute("select 1 from sqlite_schema");
-                }
-            }
-
+        try (Statement stat = conn.createStatement()) {
             for (Object each : pragmaTable.keySet()) {
                 String key = each.toString();
                 if (!pragmaParams.contains(key)) {
@@ -199,10 +179,6 @@ public final class SQLiteConfig {
                 if (value != null) {
                     stat.execute(String.format("pragma %s=%s", key, value));
                 }
-            }
-        } finally {
-            if (stat != null) {
-                stat.close();
             }
         }
     }
@@ -367,14 +343,9 @@ public final class SQLiteConfig {
 
         // Parameters requiring SQLite3 API invocation
         OPEN_MODE("open_mode", "Database open-mode flag", null),
-        SHARED_CACHE(
-                "shared_cache",
-                "Enable SQLite Shared-Cache mode, native driver only",
-                ON_OFF_CHOICES),
+        SHARED_CACHE("shared_cache", "Enable SQLite Shared-Cache mode", ON_OFF_CHOICES),
         LOAD_EXTENSION(
-                "enable_load_extension",
-                "Enable SQLite load_extension() function, native driver only",
-                ON_OFF_CHOICES),
+                "enable_load_extension", "Enable SQLite load_extension() function", ON_OFF_CHOICES),
 
         // Pragmas that can be set after opening the database
         CACHE_SIZE(
@@ -521,8 +492,6 @@ public final class SQLiteConfig {
                 "busy_timeout",
                 "Sets a busy handler that sleeps for a specified amount of time when a table is locked",
                 null),
-        HEXKEY_MODE("hexkey_mode", "Mode of the secret key", toStringArray(HexKeyMode.values())),
-        PASSWORD("password", "Database password", null),
 
         // extensions: "fake" pragmas to allow conformance with JDBC
         JDBC_EXPLICIT_READONLY(
@@ -910,30 +879,6 @@ public final class SQLiteConfig {
         DEFAULT,
         FILE,
         MEMORY;
-
-        public String getValue() {
-            return name();
-        }
-    }
-
-    /**
-     * Changes the setting of the "hexkey" flag.
-     *
-     * @param mode One of {@link HexKeyMode}:
-     *     <ul>
-     *       <li>NONE - SQLite uses a string based password
-     *       <li>SSE - the SQLite database engine will use pragma hexkey = '' to set the password
-     *       <li>SQLCIPHER - the SQLite database engine calls pragma key = "x''" to set the password
-     *     </ul>
-     */
-    public void setHexKeyMode(HexKeyMode mode) {
-        setPragma(Pragma.HEXKEY_MODE, mode.name());
-    }
-
-    public enum HexKeyMode implements PragmaValue {
-        NONE,
-        SSE,
-        SQLCIPHER;
 
         public String getValue() {
             return name();

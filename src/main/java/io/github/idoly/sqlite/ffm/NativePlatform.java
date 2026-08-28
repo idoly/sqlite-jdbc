@@ -53,9 +53,6 @@ public final class NativePlatform {
     }
 
     public static String getArchName() {
-        String override = System.getProperty("io.github.idoly.sqlite.native.architecture");
-        if (override != null && !override.isBlank()) return override;
-
         String architecture = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
         return switch (architecture) {
             case "amd64", "x86_64" -> X86_64;

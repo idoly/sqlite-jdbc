@@ -72,14 +72,6 @@ class NativePlatformTest {
         assertThat(captureOutput()).isEqualTo(NativePlatform.getNativeLibFolderPathForCurrentOS());
     }
 
-    @Test
-    void architectureOverrideSupportsCrossCompilation() {
-        withSystemProperty(
-                "io.github.idoly.sqlite.native.architecture",
-                "custom",
-                () -> assertThat(NativePlatform.getArchName()).isEqualTo("custom"));
-    }
-
     private static boolean hasResource(String path) {
         return NativePlatform.class.getResource("/io/github/idoly/sqlite/native/" + path) != null;
     }
