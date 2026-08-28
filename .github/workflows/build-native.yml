@@ -19,13 +19,18 @@ jobs:
             family: linux
             os_name: Linux
             os_arch: x86_64
+          - target: Linux-aarch64
+            runner: ubuntu-24.04-arm
+            family: linux
+            os_name: Linux
+            os_arch: aarch64
           - target: Mac-x86_64
-            runner: macos-14
+            runner: macos-15-intel
             family: mac
             os_name: Mac
             os_arch: x86_64
           - target: Mac-aarch64
-            runner: macos-14
+            runner: macos-15
             family: mac
             os_name: Mac
             os_arch: aarch64
@@ -72,7 +77,7 @@ jobs:
           docker run --rm \
             -v "$PWD:/work" -w /work \
             docker.io/almalinux:8 \
-            sh -c 'dnf install -y gcc make perl && make native OS_NAME=Linux OS_ARCH=x86_64'
+            sh -c 'dnf install -y gcc make perl && make native OS_NAME=Linux OS_ARCH=${{ matrix.os_arch }}'
 
       - name: Build macOS library
         if: matrix.family == 'mac'
@@ -121,7 +126,7 @@ jobs:
       - name: Verify complete platform set
         shell: bash
         run: |
-          test "$(find src/main/resources/io/github/idoly/sqlite/native -type f | wc -l)" -eq 5
+          test "$(find src/main/resources/io/github/idoly/sqlite/native -type f | wc -l)" -eq 6
           find src/main/resources/io/github/idoly/sqlite/native -type f -print0 | sort -z | xargs -0 sha256sum
 
       - name: Commit changed libraries

@@ -40,7 +40,7 @@ endif
 
 sqlite := sqlite-$(version)
 target := $(OS_NAME)-$(OS_ARCH)
-known_targets := Linux-x86_64 Mac-x86_64 Mac-aarch64 Windows-x86_64 Windows-aarch64
+known_targets := Linux-x86_64 Linux-aarch64 Mac-x86_64 Mac-aarch64 Windows-x86_64 Windows-aarch64
 
 ifeq (,$(filter $(target),$(known_targets)))
 $(error Unsupported native target: $(target))
@@ -57,6 +57,12 @@ Linux-x86_64_STRIP := $(CROSS_PREFIX)strip
 Linux-x86_64_CCFLAGS := $(COMMON_CCFLAGS) -m64
 Linux-x86_64_LINKFLAGS := $(UNIX_LINKFLAGS)
 Linux-x86_64_LIBNAME := libsqlite3.so
+
+Linux-aarch64_CC := $(CROSS_PREFIX)gcc
+Linux-aarch64_STRIP := $(CROSS_PREFIX)strip
+Linux-aarch64_CCFLAGS := $(COMMON_CCFLAGS)
+Linux-aarch64_LINKFLAGS := $(UNIX_LINKFLAGS)
+Linux-aarch64_LIBNAME := libsqlite3.so
 
 Mac-x86_64_CC := $(CROSS_PREFIX)clang -arch x86_64
 Mac-x86_64_STRIP := $(CROSS_PREFIX)strip -x

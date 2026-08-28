@@ -8,18 +8,36 @@ on:
 
 jobs:
   test:
-    name: JVM ${{ matrix.java }} (${{ matrix.os }})
+    name: JVM ${{ matrix.java }} (${{ matrix.platform.name }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14, windows-2025]
+        platform:
+          - name: Linux x86_64
+            runner: ubuntu-latest
+            distribution: temurin
+          - name: Linux aarch64
+            runner: ubuntu-24.04-arm
+            distribution: temurin
+          - name: macOS x86_64
+            runner: macos-15-intel
+            distribution: temurin
+          - name: macOS aarch64
+            runner: macos-15
+            distribution: temurin
+          - name: Windows x86_64
+            runner: windows-2025
+            distribution: temurin
+          - name: Windows aarch64
+            runner: windows-11-arm
+            distribution: liberica
         java: [25, 26]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.platform.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: ${{ matrix.platform.distribution }}
           java-version: ${{ matrix.java }}
           cache: maven
       - run: mvn --batch-mode --no-transfer-progress spotless:check clean package

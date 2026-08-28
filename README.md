@@ -66,7 +66,7 @@ JAR 只加载内置 SQLite，不回退到系统库。内置库启用 SQLite 官�
 mvn spotless:check clean package
 ```
 
-五个平台动态库由 [Build Native](https://github.com/idoly/sqlite-jdbc/actions/workflows/build-native.yml) 构建。FFM 绑定由 jextract 25 生成并提交源码；更新 SQLite C ABI 绑定时执行：
+六个平台动态库由 [Build Native](https://github.com/idoly/sqlite-jdbc/actions/workflows/build-native.yml) 构建。FFM 绑定由 jextract 25 生成并提交源码；更新 SQLite C ABI 绑定时执行：
 
 ```shell
 make generate-bindings JEXTRACT=/path/to/jextract
