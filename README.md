@@ -3,6 +3,8 @@
 [![CI](https://github.com/idoly/sqlite-jdbc/actions/workflows/ci.yml/badge.svg)](https://github.com/idoly/sqlite-jdbc/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.idoly/sqlite-jdbc.svg)](https://central.sonatype.com/artifact/io.github.idoly/sqlite-jdbc)
 
+基于 JDK Foreign Function & Memory API 的 SQLite JDBC 驱动。
+
 ## 使用
 
 ```xml
