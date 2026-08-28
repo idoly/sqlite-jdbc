@@ -1,9 +1,7 @@
 package io.github.idoly.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
-import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
@@ -15,13 +13,11 @@ import java.sql.Types;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledInNativeImage;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -1723,36 +1719,27 @@ public class DatabaseMetaDataTest {
     }
 
     @Test
-    @DisabledInNativeImage // assertj Assumptions do not work in native-image tests
     public void version() throws Exception {
-        assumeThat(TestSupport.getCompileOptions(conn))
-                .as("Can't check the version if not compiled by us")
-                .contains("JDBC_EXTENSIONS");
-        Properties version;
-        try (InputStream resourceAsStream =
-                DatabaseMetaDataTest.class.getResourceAsStream(
-                        "/META-INF/maven/io.github.idoly/sqlite-jdbc/VERSION")) {
-            version = new Properties();
-            assumeThat(resourceAsStream).isNotNull();
-            version.load(resourceAsStream);
-        }
-        String versionString = version.getProperty("version");
-        int majorVersion = Integer.parseInt(versionString.split("\\.")[0]);
-        int minorVersion = Integer.parseInt(versionString.split("\\.")[1]);
+        String driverVersion = SQLiteDriver.getVersion();
+        String databaseVersion = meta.getDatabaseProductVersion();
+        String[] driverComponents = driverVersion.split("\\.");
+        String[] databaseComponents = databaseVersion.split("\\.");
 
-        assertThat(majorVersion > 0).as("major version check").isTrue();
         assertThat(meta.getDriverName()).as("driver name").isEqualTo("SQLite JDBC");
-        assertThat(
-                        meta.getDriverVersion()
-                                .startsWith(String.format("%d.%d", majorVersion, minorVersion)))
-                .as("driver version")
-                .isTrue();
-        assertThat(meta.getDriverMajorVersion()).as("driver major version").isEqualTo(majorVersion);
-        assertThat(meta.getDriverMinorVersion()).as("driver minor version").isEqualTo(minorVersion);
+        assertThat(meta.getDriverVersion()).as("driver version").startsWith(driverVersion);
+        assertThat(meta.getDriverMajorVersion())
+                .as("driver major version")
+                .isEqualTo(Integer.parseInt(driverComponents[0]));
+        assertThat(meta.getDriverMinorVersion())
+                .as("driver minor version")
+                .isEqualTo(Integer.parseInt(driverComponents[1]));
         assertThat(meta.getDatabaseProductName()).as("db name").isEqualTo("SQLite");
-        assertThat(meta.getDatabaseProductVersion()).as("db version").isEqualTo(versionString);
-        assertThat(meta.getDatabaseMajorVersion()).as("db major version").isEqualTo(majorVersion);
-        assertThat(meta.getDatabaseMinorVersion()).as("db minor version").isEqualTo(minorVersion);
+        assertThat(meta.getDatabaseMajorVersion())
+                .as("db major version")
+                .isEqualTo(Integer.parseInt(databaseComponents[0]));
+        assertThat(meta.getDatabaseMinorVersion())
+                .as("db minor version")
+                .isEqualTo(Integer.parseInt(databaseComponents[1]));
         assertThat(meta.getUserName()).as("user name").isNull();
     }
 

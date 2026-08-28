@@ -103,7 +103,6 @@ SQLITE_ARCHIVE:=$(TARGET)/$(sqlite)-amal.zip
 SQLITE_UNPACKED:=$(TARGET)/sqlite-unpack.log
 SQLITE_SOURCE?=$(TARGET)/$(SQLITE_AMAL_PREFIX)
 SQLITE_HEADER?=$(SQLITE_SOURCE)/sqlite3.h
-SQLITE_EXTENSION_SOURCES := $(wildcard src/main/c/*.c)
 
 SQLITE_INCLUDE := $(shell dirname "$(SQLITE_HEADER)")
 
@@ -144,16 +143,7 @@ clean: clean-native clean-java clean-tests
 
 $(SQLITE_OUT)/sqlite3.o : $(SQLITE_UNPACKED)
 	@mkdir -p $(@D)
-	perl -p -e "s/sqlite3_api;/sqlite3_api = 0;/g" \
-	    $(SQLITE_SOURCE)/sqlite3ext.h > $(SQLITE_OUT)/sqlite3ext.h
-# insert a code for loading extension functions
-	perl -p -e "s/^static int openDatabase\(/int RegisterExtensionFunctions(sqlite3 *db);\nstatic int openDatabase(/; s/^opendb_out:/  if(!db->mallocFailed \&\& rc==SQLITE_OK){ rc = RegisterExtensionFunctions(db); }\nopendb_out:/;" \
-	    $(SQLITE_SOURCE)/sqlite3.c > $(SQLITE_OUT)/sqlite3.c.tmp
-# register compile option 'JDBC_EXTENSIONS'
 # limits defined here: https://www.sqlite.org/limits.html
-	perl -p -e "s/^(static const char \* const sqlite3azCompileOpt.+)$$/\1\n\n\/* This has been automatically added by sqlite-jdbc *\/\n  \"JDBC_EXTENSIONS\",/;" \
-	    $(SQLITE_OUT)/sqlite3.c.tmp > $(SQLITE_OUT)/sqlite3.c
-	cat $(SQLITE_EXTENSION_SOURCES) >> $(SQLITE_OUT)/sqlite3.c
 	$(CC) -o $@ -c $(CCFLAGS) \
 	    -DSQLITE_ENABLE_LOAD_EXTENSION=1 \
 	    -DSQLITE_HAVE_ISNAN \
@@ -182,7 +172,7 @@ $(SQLITE_OUT)/sqlite3.o : $(SQLITE_UNPACKED)
 	    -DSQLITE_DISABLE_PAGECACHE_OVERFLOW_STATS \
 	    -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT \
 	    $(SQLITE_FLAGS) \
-	    $(SQLITE_OUT)/sqlite3.c
+	    $(SQLITE_SOURCE)/sqlite3.c
 
 $(SQLITE_SOURCE)/sqlite3.h: $(SQLITE_UNPACKED)
 
