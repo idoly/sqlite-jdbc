@@ -17,7 +17,7 @@
 | Windows | `x86_64`、`aarch64` |
 | JPMS | `io.github.idoly.sqlite` |
 
-JAR 只加载当前平台的内置 SQLite，不回退到系统 SQLite。Linux musl 和 32 位系统不受支持。
+JAR 只加载内置 SQLite，以固定版本和编译能力，不回退到系统库。Linux musl 和 32 位系统不受支持。
 
 ## 引入
 
@@ -87,16 +87,12 @@ public final class SQLiteDemo {
 | 共享内存数据库 | `jdbc:sqlite:file:shared?mode=memory&cache=shared` |
 | 只读文件 | `jdbc:sqlite:file:sample.db?mode=ro` |
 
+不再内置非标准 SQL 函数；官方 math、percentile 和 `SQLiteFunction` 仍可用。
+
 ## 构建
 
 ```shell
 mvn spotless:check clean package
 ```
 
-仓库内的五个平台动态库由 [Build Native](https://github.com/idoly/sqlite-jdbc/actions/workflows/build-native.yml) workflow 构建。使用本机工具链重建当前平台时执行：
-
-```shell
-make native
-```
-
-FFM C ABI 由 jextract 25 生成并提交源码；更新 binding 时执行 `make generate-bindings JEXTRACT=/path/to/jextract`。
+动态库由 [Build Native](https://github.com/idoly/sqlite-jdbc/actions/workflows/build-native.yml) 构建。FFM 绑定由 jextract 25 生成并提交源码，更新时执行 `make generate-bindings JEXTRACT=/path/to/jextract`。
